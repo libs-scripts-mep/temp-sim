@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "@libs-scripts-mep/serial-pvi": "^1.2.0"
+  },
+  "name": "temp-sim",
+  "description": "| Item      | Detalhe |\r | --------- | ------- |\r | Interface | UART    |\r | Baud Rate | 9600    |\r | Data Bits | 8       |\r | Paridade  | Even    |\r | Stop Bit  | 1       |",
+  "version": "1.0.0",
+  "main": "temp-sim.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
