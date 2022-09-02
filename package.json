@@ -1,15 +1,30 @@
 {
   "dependencies": {
+    "@libs-scripts-mep/crc": "^1.0.0",
     "@libs-scripts-mep/serial-pvi": "^1.2.0"
   },
-  "name": "temp-sim",
-  "description": "| Item      | Detalhe |\r | --------- | ------- |\r | Interface | UART    |\r | Baud Rate | 9600    |\r | Data Bits | 8       |\r | Paridade  | Even    |\r | Stop Bit  | 1       |",
+  "name": "@libs-scripts-mep/temp-sim",
+  "description": "Biblioteca que auxilia no gerenciamento do simulador de temperatura inova",
   "version": "1.0.0",
   "main": "temp-sim.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libs-scripts-mep/temp-sim.git"
+  },
+  "keywords": [
+    "temperatura",
+    "simulador",
+    "sim",
+    "temp",
+    "cappo"
+  ],
+  "author": "Lucas Kroth",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/libs-scripts-mep/temp-sim/issues"
+  },
+  "homepage": "https://github.com/libs-scripts-mep/temp-sim#readme"
 }
