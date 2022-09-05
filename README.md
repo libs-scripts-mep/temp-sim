@@ -5,18 +5,174 @@
 Abra o terminal, e na pasta do script, execute:
 
 ```
-npm i npm i @libs-scripts-mep/temp-sim
+npm i @libs-scripts-mep/temp-sim
 ```
 
 Após fianlizada a instalação da biblioteca, inclua em seu html:
 
 ```html
-	<script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
+<script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
 ```
 
-# Comunicação
+> ⚠️ Se seu projeto não utiliza a [serial-pvi](https://www.npmjs.com/package/@libs-scripts-mep/serial-pvi) ou [crc](https://www.npmjs.com/package/@libs-scripts-mep/crc), será necessário incluir também em seu html:
 
-## Detalhes da Interface
+```html
+<script src="node_modules/@libs-scripts-mep/temp-sim/node_modules/@libs-scripts-mep/crc/CRC.js"></script>
+<script src="node_modules/@libs-scripts-mep/temp-sim/node_modules/@libs-scripts-mep/serial-pvi/serial-pvi.js"></script>
+```
+## Resumo da Classe
+
+```js 
+//temp-sim.js
+
+class SimuladorTemp extends SerialPVI {
+
+    constructor(baudRate = 9600, paridade = 2) {
+        super(baudRate, paridade)
+        this.Modbus = { } //Objeto contendo configurações gerais do protocolo 
+        this.OutputConfig = { } //Objeto contendo configuração atual em modo de operação Output [0]
+    }
+
+    SetConfig(sensor, modoOp, temp, grp, callback) {
+        switch (modoOp) {
+            case "Output":
+                this.OutputConfig.ModoOperacao = "00 00"
+				this.OutputConfig.Valor = "00 00"
+				this.OutputConfig.TipoSensor = "00 00"
+				this.OutputConfig.Grupo = "00 00"
+				callback(true, "Configuracao bem sucedida")
+            case "Input":
+                //não implementado
+                break
+            default:
+                callback(false, "Modo Inválido")
+                break
+        }
+    }
+
+    SendConfig(callback, timeOut = 500, config = this.OutputConfig) {
+
+        let nroRegisters = "00 04"
+        let byteCount = "08"
+		let regex = new RegExp("")
+
+        let requisicao = this.Modbus.Address.Slave + " "
+            + this.Modbus.Function.WriteMultipleRegisters + " "
+            + this.Modbus.Address.HoldingRegister.TipoSensor + " "
+            + nroRegisters + " "
+            + byteCount + " "
+            + config.TipoSensor + " "
+            + config.ModoOperacao + " "
+            + config.Valor + " "
+            + config.Grupo
+
+        this.SendData(requisicao)
+		let byteData = this.ReadData(this.COMPORT).match(regex)
+		if (byteData != null) {
+			callback(true, "Sucesso no envio da configuração")
+		} else {
+			callback(false, "Falha no envio da configuração")
+		}
+    }
+}
+```
+
+## Exemplo de Utilização
+
+> ⚠️ O exemplo abaixo é apenas uma sugestão de utilização.
+
+```js
+//Main.js
+
+class Main {
+    constructor() {
+        this.SimTemp = new SimuladorTemp()
+    }
+
+	MaquinaDeEstados(estado) {
+		switch (estado) {
+
+			case "EncontraCOMSimTemp":
+
+				//Executa código interno do if, apenas se não encontrou a COM anteriormente
+				if (sessionStorage.getItem("PortaCOM_SimuladorTemp") == null) {
+
+					//Procura porta COM que o simulador está conectado
+					this.SimTemp.getConnectedPortCom(this.SimTemp.ReqID, this.SimTemp.RegexID, (result, port) => {
+
+						//se encontrou a porta COM:
+						if (result) {
+							sessionStorage.setItem("PortaCOM_SimuladorTemp", port)
+							//segue o teste...
+						} else {
+							//seta devidas falhas, e segue o teste...
+						}
+
+					}, 500)
+				} else {
+					this.SimTemp.setPortCom(sessionStorage.getItem("PortaCOM_SimuladorTemp"))
+					//segue o teste...
+				}
+				break
+
+			case "Calibra10TipoJ":
+
+				//Manipula objeto de configuração de Output baseado nos parametros passados
+				this.SimTemp.SetConfig("J", "Output", 10, "A", (configSucess, msg) => {
+
+					//Se configuracao bem sucedida:
+					if (configSucess) {
+
+						//Tenta enviar configuracoes ao simulador
+						this.SimTemp.SendConfig((sendSucess, msg) => {
+
+							//se envio bem sucedido:
+							if (sendSucess) {
+								//segue o teste...
+							} else {
+								//seta devidas falhas, e segue o teste...
+							}
+
+						})
+
+					} else {
+						console.error(msg)
+					}
+				})
+				break
+
+			case "Calibra750TipoJ":
+
+				//Manipula objeto de configuração de Output baseado nos parametros passados
+				this.SimTemp.SetConfig("J", "Output", 750, "A", (configSucess, msg) => {
+
+					//Se configuracao bem sucedida:
+					if (configSucess) {
+
+						//Tenta enviar configuracoes ao simulador
+						this.SimTemp.SendConfig((sendSucess, msg) => {
+
+							//se envio bem sucedido:
+							if (sendSucess) {
+								//segue o teste...
+							} else {
+								//seta devidas falhas, e segue o teste...
+							}
+
+						})
+
+					} else {
+						console.error(msg)
+					}
+				})
+				break
+		}
+	}
+}
+```
+# Detalhes Comunicação
+
+## Interface
 
 | Item      | Detalhe |
 | --------- | ------- |
@@ -26,14 +182,30 @@ Após fianlizada a instalação da biblioteca, inclua em seu html:
 | Paridade  | Par     |
 | Stop Bit  | 1       |
 
+## Funções Modbus
+
+| Função                     | Código | Implementada |
+| -------------------------- | :----: | :----------: |
+| Read Device Identification |  0x2B  |      ✔️       |
+| Read Holding Registers     |  0x03  |      ✔️       |
+| Read Input Registers       |  0x04  |      ❌       |
+| Write Single Register      |  0x06  |      ❌       |
+| Write Multiple Registers   |  0x10  |      ✔️       |
+
 ## Mapa de Registradores
 
-| Address | Tipo de Registrador | Descrição                             | Observação                                                         |
-| ------- | ------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| 0x1E    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | ***default*** Tipo J                                               |
-| 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) |                                                                    |
-| 0x20    | Holding Register    | [Valor](#valor)                       | Tera efeito somente para [Modo de Operação](#modo-de-operação) = 0 |
-| 0x21    | Holding Register    | [Grupo](#grupo)                       |                                                                    |
+| Slave Address |
+| ------------- |
+| 0x01          |
+
+| Address | Tipo de Registrador | Descrição                             | Referência em Firmware | Observação                                             |
+| ------- | ------------------- | ------------------------------------- | ---------------------- | ------------------------------------------------------ |
+| 0x1E    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0 |
+| 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0 |
+| 0x20    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0 |
+| 0x21    | Holding Register    | [Grupo](#grupo)                       | SET_GROUP              |                                                        |
+| 0x22    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                |                                                        |
+| 0x23    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Temperatura Ambiente                                   |
 
 ### Tipo de Sensor
 
@@ -96,15 +268,3 @@ Confira a estrutura do frame:
 | 0x00 | Grupo (Low Byte)              | -                                                                 |
 | 0xEF | CRC (High Byte)               | Ciclic Redundancy Check                                           |
 | 0x1F | CRC (Low Byte)                | -                                                                 |
-
-
-### Cola
-
-| Tipo de Sensor | Modo de Operação | Valor | Requisição                                         |
-| -------------- | ---------------- | ----- | -------------------------------------------------- |
-| Tipo J         | Output           | 10°C  | 01 10 00 1E 00 04 08 00 00 00 00 00 0A 00 00 BE 50 |
-| Tipo J         | Output           | 300°C | 01 10 00 1E 00 04 08 00 00 00 00 01 2C 00 00 5E 67 |
-| Tipo J         | Output           | 750°C | 01 10 00 1E 00 04 08 00 00 00 00 02 EE 00 00 FF DF |
-| Tipo K         | Output           | 10°C  | 01 10 00 1E 00 04 08 00 01 00 00 00 0A 00 00 AE 90 |
-| Tipo K         | Output           | 300°C | 01 10 00 1E 00 04 08 00 01 00 00 01 2C 00 00 4E A7 |
-| Tipo K         | Output           | 750°C | 01 10 00 1E 00 04 08 00 01 00 00 02 EE 00 00 EF 1F |
