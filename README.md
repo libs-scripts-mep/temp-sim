@@ -1,5 +1,17 @@
 # Simulador de Temperatura Inova
 
+Biblioteca que controla o simulador de temperatura inova.
+
+## Tabela de Compatibilidade
+
+| Firmware |       |
+| -------- | :---: |
+| v02      |   ✔️   |
+
+| PVI       |       |
+| --------- | :---: |
+| M1PL2_2.0 |   ✔️   |
+
 ## Instalando
 
 Abra o terminal, e na pasta do script, execute:
@@ -14,12 +26,19 @@ Após fianlizada a instalação da biblioteca, inclua em seu html:
 <script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
 ```
 
+<br>
+
 > ⚠️ Se seu projeto não utiliza a [serial-pvi](https://www.npmjs.com/package/@libs-scripts-mep/serial-pvi) ou [crc](https://www.npmjs.com/package/@libs-scripts-mep/crc), será necessário incluir também em seu html:
 
 ```html
-<script src="node_modules/@libs-scripts-mep/temp-sim/node_modules/@libs-scripts-mep/crc/CRC.js"></script>
-<script src="node_modules/@libs-scripts-mep/temp-sim/node_modules/@libs-scripts-mep/serial-pvi/serial-pvi.js"></script>
+<!-- DEPENDENCIAS -->
+<script src="node_modules/@libs-scripts-mep/crc/CRC.js"></script>
+<script src="node_modules/@libs-scripts-mep/serial-pvi/serial-pvi.js"></script>
+<!-- BIBLIOTECA -->
+<script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
 ```
+
+> ⚠️Fique atento à ordem de carregamento dos arquivos, as dependências devem ser carregadas **ANTES** da biblioteca, como no trecho acima.
 ## Resumo da Classe
 
 ```js 
@@ -28,58 +47,152 @@ Após fianlizada a instalação da biblioteca, inclua em seu html:
 class SimuladorTemp extends SerialPVI {
 
     constructor(baudRate = 9600, paridade = 2) {
-        super(baudRate, paridade)
-        this.Modbus = { } //Objeto contendo configurações gerais do protocolo 
-        this.OutputConfig = { } //Objeto contendo configuração atual em modo de operação Output [0]
+        super(baudRate, paridade) //cria uma instancia e herda metodos da classe SerialPVI
+        this.Modbus = { } //Objeto de parametros configuraveis do protocolo
+        this.OutputConfig = { } //Objeto de parametros configuraveis que serao enviados ao simulador
     }
 
-    SetConfig(sensor, modoOp, temp, grp, callback) {
-        switch (modoOp) {
-            case "Output":
-                this.OutputConfig.ModoOperacao = "00 00"
-				this.OutputConfig.Valor = "00 00"
-				this.OutputConfig.TipoSensor = "00 00"
-				this.OutputConfig.Grupo = "00 00"
-				callback(true, "Configuracao bem sucedida")
-            case "Input":
-                //não implementado
+    /**
+     * Manipula objeto de configuração de Output baseado nos parametros passados
+     * 
+     * Ex: SetOutputConfig("J", 300, "A", ()=>{ })
+     * 
+     * @param {string} sensor Opcoes: "J", "K", "mV"
+     * @param {number} valor Ranges: ___ J: [0 - 750] __ K: [0 - 1150] __ mV: [0 - 100]
+     * @param {string} grupo Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
+     * @param {function} callback
+     */
+    SetOutputConfig(callback, sensor, valor, grupo = "A") {
+        let result = true
+        let msg = ""
+        switch (grupo) {
+            case "A":
+                this.OutputConfig.Grupo = "00 00"
+                break
+            case "...":
+                //...
+                break
+            case "H":
+                this.OutputConfig.Grupo = "00 07"
                 break
             default:
-                callback(false, "Modo Inválido")
+                result = false
+                msg += "Grupo Inválido"
                 break
         }
+        if (result) {
+            switch (sensor) {
+                case "J":
+                    if (valorValido) {
+                        result = true
+                        msg += "Nova Configuração Recebida"
+                    } else {
+                        result = false
+                        msg += "Não é um número, ou valor fora do range [10 - 750]"
+                    }
+                    break
+                case "K":
+                    if (valorValido) {
+                        result = true
+                        msg += "Nova Configuração Recebida"
+                    } else {
+                        result = false
+                        msg += "Não é um número, ou valor fora do range [10 - 1150]"
+                    }
+                    break
+                case "mV":
+                    if (valorValido) {
+                        result = true
+                        msg += "Nova Configuração Recebida"
+                    } else {
+                        result = false
+                        msg += "Não é um número, ou valor fora do range [0 - 100]"
+                    }
+                    break
+                default:
+                    result = false
+                    msg += "Sensor Inválido"
+                    break
+            }
+        }
+        callback({
+            "result": result,
+            "msg": msg
+        })
     }
 
-    SendConfig(callback, timeOut = 500, config = this.OutputConfig) {
+    /**
+     * Envia objeto de configuração passado como parametro ao simulador de temperatura
+     * 
+     * @param {function} callback 
+     * @param {number} timeOut 
+     * @param {object} config 
+     */
+    SendOutputConfig(callback, timeOut = 500, config = this.OutputConfig) {
 
-        let nroRegisters = "00 04"
-        let byteCount = "08"
-		let regex = new RegExp("")
-
-        let requisicao = this.Modbus.Address.Slave + " "
-            + this.Modbus.Function.WriteMultipleRegisters + " "
-            + this.Modbus.Address.HoldingRegister.TipoSensor + " "
-            + nroRegisters + " "
-            + byteCount + " "
-            + config.TipoSensor + " "
-            + config.ModoOperacao + " "
-            + config.Valor + " "
-            + config.Grupo
+        let requisicao
+        requisicao = CRC16.Calculate(requisicao)
 
         this.SendData(requisicao)
-		let byteData = this.ReadData(this.COMPORT).match(regex)
+
+		let byteData = this.ReadData()
+
 		if (byteData != null) {
-			callback(true, "Sucesso no envio da configuração")
+			callback({
+				"result": true,
+				"msg": "Sucesso ao enviar a requisição"
+			})
 		} else {
-			callback(false, "Falha no envio da configuração")
+			callback({
+				"result": false,
+				"msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
+			})
 		}
+    }
+
+    /**
+     * Retorna os valores lidos nas entradas do simulador [Temperatura ambiente e entrada de termopar]
+     * 
+     * Na leitura de termopar, é retornado também em qual tipo de sensor o valor foi traduzido [Tipo J ou Tipo K]
+     * 
+     * @param {function} callback 
+     * @param {number} timeOut 
+     */
+    ReqInputValue(callback, timeOut = 500) {
+
+        requisicao = CRC16.Calculate(requisicao)
+        this.SendData(requisicao, this.COMPORT)
+
+		let byteArray = this.ReadData()
+
+		let sensor = CRCUtils.HextoDecimal(byteArray[sensorHighByte] + byteArray[sensorLowByte])
+		let valorInput = CRCUtils.HextoDecimal(byteArray[valorInputHighByte] + byteArray[valorInputLowByte]) / 10
+		let valorAmbiente = CRCUtils.HextoDecimal(byteArray[valorAmbienteHighByte] + byteArray[valorAmbienteLowByte]) / 10
+
+		switch (sensor) {
+			case 0:
+				sensor = "J"
+				break
+			case 1:
+				sensor = "K"
+				break
+			default:
+				sensor = null
+				break
+		}
+
+		callback({
+			"result": true,
+			"msg": "Sucesso ao obter valores",
+			"sensor": sensor,
+			"valorInput": valorInput,
+			"valorAmbiente": valorAmbiente
+		})
     }
 }
 ```
 
 ## Exemplo de Utilização
-
-> ⚠️ O exemplo abaixo é apenas uma sugestão de utilização.
 
 ```js
 //Main.js
@@ -118,61 +231,65 @@ class Main {
 			case "Calibra10TipoJ":
 
 				//Manipula objeto de configuração de Output baseado nos parametros passados
-				this.SimTemp.SetConfig("J", "Output", 10, "A", (configSucess, msg) => {
+				this.SimTemp.SetOutputConfig((setRes) => {
 
 					//Se configuracao bem sucedida:
-					if (configSucess) {
+					if (setRes.result) {
 
 						//Tenta enviar configuracoes ao simulador
-						this.SimTemp.SendConfig((sendSucess, msg) => {
+						this.SimTemp.SendOutputConfig((sendRes) => {
 
 							//se envio bem sucedido:
-							if (sendSucess) {
+							if (sendRes.result) {
 								//segue o teste...
 							} else {
+								console.error(sendRes.msg)
 								//seta devidas falhas, e segue o teste...
 							}
 
 						})
 
 					} else {
-						console.error(msg)
+						console.error(setRes.msg)
+						//seta devidas falhas, e segue o teste...
 					}
-				})
+				}, "J", 10, "A")
 				break
 
 			case "Calibra750TipoJ":
 
 				//Manipula objeto de configuração de Output baseado nos parametros passados
-				this.SimTemp.SetConfig("J", "Output", 750, "A", (configSucess, msg) => {
+				this.SimTemp.SetOutputConfig((setRes) => {
 
 					//Se configuracao bem sucedida:
-					if (configSucess) {
+					if (setRes.result) {
 
 						//Tenta enviar configuracoes ao simulador
-						this.SimTemp.SendConfig((sendSucess, msg) => {
+						this.SimTemp.SendOutputConfig((sendRes) => {
 
 							//se envio bem sucedido:
-							if (sendSucess) {
+							if (sendRes.result) {
 								//segue o teste...
 							} else {
+								console.error(sendRes.msg)
 								//seta devidas falhas, e segue o teste...
 							}
 
 						})
 
 					} else {
-						console.error(msg)
+						console.error(setRes.msg)
+						//seta devidas falhas, e segue o teste...
 					}
-				})
+				}, "J", 750, "A")
 				break
 		}
 	}
 }
 ```
-# Detalhes Comunicação
+# Detalhes de Firmware e Hardware
 
-## Interface
+## Interface Comunicacao
 
 | Item      | Detalhe |
 | --------- | ------- |
@@ -182,7 +299,7 @@ class Main {
 | Paridade  | Par     |
 | Stop Bit  | 1       |
 
-## Funções Modbus
+## Funções Modbus Implementadas
 
 | Função                     | Código | Implementada |
 | -------------------------- | :----: | :----------: |
@@ -198,14 +315,14 @@ class Main {
 | ------------- |
 | 0x01          |
 
-| Address | Tipo de Registrador | Descrição                             | Referência em Firmware | Observação                                             |
-| ------- | ------------------- | ------------------------------------- | ---------------------- | ------------------------------------------------------ |
-| 0x1E    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0 |
-| 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0 |
-| 0x20    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0 |
-| 0x21    | Holding Register    | [Grupo](#grupo)                       | SET_GROUP              |                                                        |
-| 0x22    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                |                                                        |
-| 0x23    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Temperatura Ambiente                                   |
+| Address | Tipo de Registrador | Descrição                             | Referência em Firmware | Observação                                                                     |
+| ------- | ------------------- | ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
+| 0x1E    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x20    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x21    | Holding Register    | [Grupo](#grupo)                       | SET_GROUP              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x22    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
+| 0x23    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
 
 ### Tipo de Sensor
 
@@ -222,13 +339,15 @@ class Main {
 | 0       | 0x00 | Output (Geração de Sinal) |
 | 1       | 0x01 | Input (Leitura de Sinal)  |
 
+> ⚠️ Modo de operação só impacta apresentação no display.
+
 ### Valor
 
-| Decimal | Hex    | Opção                                                                                          |
-| ------- | ------ | ---------------------------------------------------------------------------------------------- |
-| 10      | 0x000A | Seta a temperatura em 10 graus, de acordo com o [Tipo de Sensor](#tipo-de-sensor) configurado  |
-| 300     | 0x012C | Seta a temperatura em 300 graus, de acordo com o [Tipo de Sensor](#tipo-de-sensor) configurado |
-| 750     | 0x02EE | Seta a temperatura em 750 graus, de acordo com o [Tipo de Sensor](#tipo-de-sensor) configurado |
+| Decimal | Hex    | Opção                                                                                      |
+| ------- | ------ | ------------------------------------------------------------------------------------------ |
+| 10      | 0x000A | Seta a saida em 10 graus convertidos para o [Tipo de Sensor](#tipo-de-sensor) configurado  |
+| 300     | 0x012C | Seta a saida em 300 graus convertidos para o [Tipo de Sensor](#tipo-de-sensor) configurado |
+| 750     | 0x02EE | Seta a saida em 750 graus convertidos para o [Tipo de Sensor](#tipo-de-sensor) configurado |
 
 ### Grupo
 
@@ -240,6 +359,8 @@ class Main {
 | 3       | 0x03 | Grupo D   |
 | 4       | 0x04 | Grupo E   |
 | ...     | 0x01 | Grupo ... |
+
+> ⚠️ Grupo só impacta seleção de preset das teclas A, B e C.
 
 ## Desmembrando a Requisição
 
