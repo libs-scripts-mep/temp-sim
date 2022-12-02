@@ -2,9 +2,10 @@ class SimuladorTemp extends SerialPVI {
 
     constructor(baudRate = 9600, paridade = 2) {
         super(baudRate, paridade)
+        this.FirmwareVersion = null
         this.Modbus = {
-            RegexReadDeviceID: new RegExp("01 2B 0E 04 81 00 00 01 00 06 49 4E 4F 56 41 00 21 DB"),
-            ReqReadDeviceID: "01 2B 0E 04 00 73 27",
+            RegexReadDeviceID: new RegExp("(01 2B 0E 04 81 00 00 01 02 05) ([0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2})"),
+            ReqReadDeviceID: "01 2B 0E 04 02 F2 E6",
             Function: {
                 WriteMultipleRegisters: "10",
                 ReadHoldingRegisters: "03"
@@ -16,11 +17,9 @@ class SimuladorTemp extends SerialPVI {
                     ModoOperacao: "00 1F",
                     Valor: "00 20",
                     Grupo: "00 21",
-                    ValorLeitura: "00 22",
-                    ValorAmbiente: "00 23"
-                },
-                InputRegister: {
-
+                    Compensacao: "00 22",
+                    ValorLeitura: "00 23",
+                    ValorAmbiente: "00 24"
                 }
             },
             CRCConfig: {
@@ -34,8 +33,63 @@ class SimuladorTemp extends SerialPVI {
             TipoSensor: "00 00",
             ModoOperacao: "00 00",
             Valor: "00 00",
-            Grupo: "00 00"
+            Grupo: "00 00",
+            Compensacao: "00 00"
         }
+    }
+
+    /**
+     * Requisita versao de firmware ao simulador de temperatura
+     * @param {function} callback 
+     * @param {number} timeOut 
+     */
+    ReqFirmwareVersion(callback, timeOut = 500) {
+
+        this.SendData(this.Modbus.ReqReadDeviceID, this.COMPORT)
+
+        setTimeout(() => {
+
+            let regexVersionGroup = 2
+            let byteData = this.ReadData(this.COMPORT).match(this.Modbus.RegexReadDeviceID)
+
+            if (byteData != null) {
+                let version = SerialPVI.ConvertAscii(byteData[regexVersionGroup]).replaceAll("\x00", "")
+                callback({
+                    "version": version,
+                    "msg": "Sucesso ao enviar a requisição"
+                })
+            } else {
+                callback({
+                    "version": null,
+                    "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
+                })
+            }
+
+        }, timeOut)
+    }
+
+    /**
+     * Atribui a propriedade a versao do firmware do simulador
+     * @param {number} version 
+     * @returns true se conseguiu parsear, false se nao
+     */
+    SetFirmware(version) {
+        try {
+            this.FirmwareVersion = Number.parseFloat(version)
+            return true
+        } catch (e) {
+            return false
+        }
+    }
+
+    /**
+     * 
+     * @returns versao de firmware do simulador
+     * 
+     * OBS: Necessita previamente a utilizacao do metodo ReqFirmwareVersion()
+     */
+    GetFirmware() {
+        return this.FirmwareVersion
     }
 
     /**
@@ -48,11 +102,11 @@ class SimuladorTemp extends SerialPVI {
      * @param {string} grupo Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
      * @param {function} callback
      */
-    SetOutputConfig(callback, sensor, valor, grupo = "A") {
+    SetOutputConfig(callback, sensor, valor, grupo = "A", compensacao = false) {
 
         let result = true
         let msg = ""
-
+        compensacao ? this.OutputConfig.Compensacao = "00 01" : this.OutputConfig.Compensacao = "00 00"
         this.OutputConfig.ModoOperacao = "00 00"
 
         switch (grupo) {
@@ -162,9 +216,9 @@ class SimuladorTemp extends SerialPVI {
      */
     SendOutputConfig(callback, timeOut = 500, config = this.OutputConfig) {
 
-        let regex = new RegExp("01 10 00 1E 00 04 A1 CC")
-        let nroRegisters = "00 04"
-        let byteCount = "08"
+        let regex = new RegExp("01 10 00 1E 00 05 60 0C")
+        let nroRegisters = "00 05"
+        let byteCount = "0A"
 
         let requisicao = this.Modbus.Address.Slave + " "
             + this.Modbus.Function.WriteMultipleRegisters + " "
@@ -174,7 +228,8 @@ class SimuladorTemp extends SerialPVI {
             + config.TipoSensor + " "
             + config.ModoOperacao + " "
             + config.Valor + " "
-            + config.Grupo
+            + config.Grupo + " "
+            + config.Compensacao
 
         requisicao = CRC16.Calculate(requisicao, this.Modbus.CRCConfig.Reverse, this.Modbus.CRCConfig.ReturnFullString, this.Modbus.CRCConfig.Poly, this.Modbus.CRCConfig.Init)
 
@@ -209,16 +264,8 @@ class SimuladorTemp extends SerialPVI {
      */
     ReqInputValue(callback, timeOut = 500) {
 
-        let nroRegisters = "00 06"
-        let startAddress = this.Modbus.Address.HoldingRegister.TipoSensor//temporario
-        let regex = new RegExp("01 03 0C [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2}")
-
-        let requisicao = this.Modbus.Address.Slave + " "
-            + this.Modbus.Function.ReadHoldingRegisters + " "
-            + startAddress + " "
-            + nroRegisters
-
-        requisicao = CRC16.Calculate(requisicao, this.Modbus.CRCConfig.Reverse, this.Modbus.CRCConfig.ReturnFullString, this.Modbus.CRCConfig.Poly, this.Modbus.CRCConfig.Init)
+        let regex = new RegExp("01 03 0E ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
+        let requisicao = "01 03 00 1E 00 07 64 0E"
 
         this.SendData(requisicao, this.COMPORT)
 
@@ -228,19 +275,14 @@ class SimuladorTemp extends SerialPVI {
 
             if (byteData != null) {
 
-                let byteArray = byteData[0].split(" ")
+                //indices registradores
+                let matchSensorIndex = 1
+                let matchInputIndex = 6
+                let matchAmbienteIndex = 7
 
-                //indices de bytes da resposta
-                let sensorHighByte = 3
-                let sensorLowByte = 4
-                let valorInputHighByte = 11
-                let valorInputLowByte = 12
-                let valorAmbienteHighByte = 13
-                let valorAmbienteLowByte = 14
-
-                let sensor = CRCUtils.HextoDecimal(byteArray[sensorHighByte] + byteArray[sensorLowByte])
-                let valorInput = CRCUtils.HextoDecimal(byteArray[valorInputHighByte] + byteArray[valorInputLowByte]) / 10
-                let valorAmbiente = CRCUtils.HextoDecimal(byteArray[valorAmbienteHighByte] + byteArray[valorAmbienteLowByte]) / 10
+                let sensor = CRCUtils.HextoDecimal(byteData[matchSensorIndex])
+                let valorInput = CRCUtils.HextoDecimal(byteData[matchInputIndex]) / 10
+                let valorAmbiente = CRCUtils.HextoDecimal(byteData[matchAmbienteIndex]) / 10
 
                 switch (sensor) {
                     case 0:

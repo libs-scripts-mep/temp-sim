@@ -2,13 +2,15 @@
 
 Biblioteca que controla o simulador de temperatura inova.
 
+![Image](https://i.imgur.com/EwsKvjj.png)
+
 ## Tabela de Compatibilidade
 
 | Firmware |       |
 | -------- | :---: |
-| v02      |   ✔️   |
+| v2.21    |   ✔️   |
 
-| PVI       |       |
+| PCI       |       |
 | --------- | :---: |
 | M1PL2_2.0 |   ✔️   |
 
@@ -119,6 +121,53 @@ class SimuladorTemp extends SerialPVI {
             "result": result,
             "msg": msg
         })
+    }
+
+    /**
+     * Requisita versao de firmware ao simulador de temperatura
+     * @param {function} callback 
+     * @param {number} timeOut 
+     */
+    ReqFirmwareVersion(callback) {
+
+        this.SendData(req, this.COMPORT)
+        let byteData = this.ReadData(this.COMPORT).match(regex)
+
+        if (byteData != null) {
+            callback({
+                "version": version,
+                "msg": "Sucesso ao enviar a requisição"
+            })
+        } else {
+            callback({
+                "version": null,
+                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
+            })
+        }
+    }
+
+    /**
+     * Atribui a propriedade a versao do firmware do simulador
+     * @param {number} version 
+     * @returns true se conseguiu parsear, false se nao
+     */
+    SetFirmware(version) {
+        try {
+            this.FirmwareVersion = Number.parseFloat(version)
+            return true
+        } catch (e) {
+            return false
+        }
+    }
+
+    /**
+     * 
+     * @returns versao de firmware do simulador
+     * 
+     * OBS: Necessita previamente a utilizacao do metodo ReqFirmwareVersion()
+     */
+    GetFirmware() {
+        return this.FirmwareVersion
     }
 
     /**
