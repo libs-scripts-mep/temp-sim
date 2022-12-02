@@ -370,8 +370,9 @@ class Main {
 | 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
 | 0x20    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
 | 0x21    | Holding Register    | [Grupo](#grupo)                       | SET_GROUP              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x22    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
-| 0x23    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
+| 0x22    | Holding Register    | [Compensacao](#modo-de-compensação)   | -                      | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x23    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
+| 0x24    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
 
 ### Tipo de Sensor
 
@@ -410,6 +411,13 @@ class Main {
 | ...     | 0x01 | Grupo ... |
 
 > ⚠️ Grupo só impacta seleção de preset das teclas A, B e C.
+
+### Modo de Compensação
+
+| Decimal | Hex  | Opção               |
+| ------- | ---- | ------------------- |
+| 0       | 0x00 | Compensação Externa |
+| 1       | 0x01 | Compensação Interna |
 
 ## Desmembrando a Requisição
 
