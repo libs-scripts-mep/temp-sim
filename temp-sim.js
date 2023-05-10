@@ -98,7 +98,7 @@ class SimuladorTemp extends SerialPVI {
      * Ex: SetOutputConfig("J", 300, "A", ()=>{ })
      * 
      * @param {string} sensor Opcoes: "J", "K", "mV"
-     * @param {number} valor Ranges: ___ J: [0 - 750] __ K: [0 - 1150] __ mV: [0 - 100]
+     * @param {number} valor Ranges: ___ J: [-10 - 760] __ K: [0 - 1150] __ mV: [0 - 100]
      * @param {string} grupo Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
      * @param {function} callback
      */
@@ -152,7 +152,7 @@ class SimuladorTemp extends SerialPVI {
             switch (sensor) {
                 case "J":
 
-                    if (!isNaN(valor) && valor >= 10 && valor <= 750) {
+                    if (!isNaN(valor) && valor >= -10 && valor <= 760) {
 
                         this.OutputConfig.Valor = SerialPVI.DecimalToHex(valor)
                         this.OutputConfig.TipoSensor = "00 00"
@@ -161,7 +161,7 @@ class SimuladorTemp extends SerialPVI {
 
                     } else {
                         result = false
-                        msg += "Não é um número, ou valor fora do range [10 - 750]"
+                        msg += "Não é um número, ou valor fora do range [-10 - 760]"
                     }
 
                     break
