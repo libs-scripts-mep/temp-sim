@@ -2,7 +2,7 @@
 
 Biblioteca que controla o simulador de temperatura inova.
 
-![Image](https://i.imgur.com/EwsKvjj.png)
+![Image](https://i.imgur.com/HWpENJX.png)
 
 ## Tabela de Compatibilidade
 
@@ -41,301 +41,52 @@ Após fianlizada a instalação da biblioteca, inclua em seu html:
 ```
 
 > ⚠️Fique atento à ordem de carregamento dos arquivos, as dependências devem ser carregadas **ANTES** da biblioteca, como no trecho acima.
-## Resumo da Classe
-
-```js 
-//temp-sim.js
-
-class SimuladorTemp extends SerialPVI {
-
-    constructor(baudRate = 9600, paridade = 2) {
-        super(baudRate, paridade) //cria uma instancia e herda metodos da classe SerialPVI
-        this.Modbus = { } //Objeto de parametros configuraveis do protocolo
-        this.OutputConfig = { } //Objeto de parametros configuraveis que serao enviados ao simulador
-    }
-
-    /**
-     * Manipula objeto de configuração de Output baseado nos parametros passados
-     * 
-     * Ex: SetOutputConfig("J", 300, "A", ()=>{ })
-     * 
-     * @param {string} sensor Opcoes: "J", "K", "mV"
-     * @param {number} valor Ranges: ___ J: [0 - 750] __ K: [0 - 1150] __ mV: [0 - 100]
-     * @param {string} grupo Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
-     * @param {function} callback
-     */
-    SetOutputConfig(callback, sensor, valor, grupo = "A") {
-        let result = true
-        let msg = ""
-        switch (grupo) {
-            case "A":
-                this.OutputConfig.Grupo = "00 00"
-                break
-            case "...":
-                //...
-                break
-            case "H":
-                this.OutputConfig.Grupo = "00 07"
-                break
-            default:
-                result = false
-                msg += "Grupo Inválido"
-                break
-        }
-        if (result) {
-            switch (sensor) {
-                case "J":
-                    if (valorValido) {
-                        result = true
-                        msg += "Nova Configuração Recebida"
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou valor fora do range [10 - 750]"
-                    }
-                    break
-                case "K":
-                    if (valorValido) {
-                        result = true
-                        msg += "Nova Configuração Recebida"
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou valor fora do range [10 - 1150]"
-                    }
-                    break
-                case "mV":
-                    if (valorValido) {
-                        result = true
-                        msg += "Nova Configuração Recebida"
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou valor fora do range [0 - 100]"
-                    }
-                    break
-                default:
-                    result = false
-                    msg += "Sensor Inválido"
-                    break
-            }
-        }
-        callback({
-            "result": result,
-            "msg": msg
-        })
-    }
-
-    /**
-     * Requisita versao de firmware ao simulador de temperatura
-     * @param {function} callback 
-     * @param {number} timeOut 
-     */
-    ReqFirmwareVersion(callback) {
-
-        this.SendData(req, this.COMPORT)
-        let byteData = this.ReadData(this.COMPORT).match(regex)
-
-        if (byteData != null) {
-            callback({
-                "version": version,
-                "msg": "Sucesso ao enviar a requisição"
-            })
-        } else {
-            callback({
-                "version": null,
-                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-            })
-        }
-    }
-
-    /**
-     * Atribui a propriedade a versao do firmware do simulador
-     * @param {number} version 
-     * @returns true se conseguiu parsear, false se nao
-     */
-    SetFirmware(version) {
-        try {
-            this.FirmwareVersion = Number.parseFloat(version)
-            return true
-        } catch (e) {
-            return false
-        }
-    }
-
-    /**
-     * 
-     * @returns versao de firmware do simulador
-     * 
-     * OBS: Necessita previamente a utilizacao do metodo ReqFirmwareVersion()
-     */
-    GetFirmware() {
-        return this.FirmwareVersion
-    }
-
-    /**
-     * Envia objeto de configuração passado como parametro ao simulador de temperatura
-     * 
-     * @param {function} callback 
-     * @param {number} timeOut 
-     * @param {object} config 
-     */
-    SendOutputConfig(callback, timeOut = 500, config = this.OutputConfig) {
-
-        let requisicao
-        requisicao = CRC16.Calculate(requisicao)
-
-        this.SendData(requisicao)
-
-		let byteData = this.ReadData()
-
-		if (byteData != null) {
-			callback({
-				"result": true,
-				"msg": "Sucesso ao enviar a requisição"
-			})
-		} else {
-			callback({
-				"result": false,
-				"msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-			})
-		}
-    }
-
-    /**
-     * Retorna os valores lidos nas entradas do simulador [Temperatura ambiente e entrada de termopar]
-     * 
-     * Na leitura de termopar, é retornado também em qual tipo de sensor o valor foi traduzido [Tipo J ou Tipo K]
-     * 
-     * @param {function} callback 
-     * @param {number} timeOut 
-     */
-    ReqInputValue(callback, timeOut = 500) {
-
-        requisicao = CRC16.Calculate(requisicao)
-        this.SendData(requisicao, this.COMPORT)
-
-		let byteArray = this.ReadData()
-
-		let sensor = CRCUtils.HextoDecimal(byteArray[sensorHighByte] + byteArray[sensorLowByte])
-		let valorInput = CRCUtils.HextoDecimal(byteArray[valorInputHighByte] + byteArray[valorInputLowByte]) / 10
-		let valorAmbiente = CRCUtils.HextoDecimal(byteArray[valorAmbienteHighByte] + byteArray[valorAmbienteLowByte]) / 10
-
-		switch (sensor) {
-			case 0:
-				sensor = "J"
-				break
-			case 1:
-				sensor = "K"
-				break
-			default:
-				sensor = null
-				break
-		}
-
-		callback({
-			"result": true,
-			"msg": "Sucesso ao obter valores",
-			"sensor": sensor,
-			"valorInput": valorInput,
-			"valorAmbiente": valorAmbiente
-		})
-    }
-}
-```
 
 ## Exemplo de Utilização
 
 ```js
-//Main.js
-
-class Main {
-    constructor() {
+class TestScript {
+    constructor(eventMap, event) {
         this.SimTemp = new SimuladorTemp()
+
+        this.Run()
+            .then(async () => {
+                //se tudo OK
+            })
+            .catch((error) => {
+                //se algo NOK
+            })
     }
 
-	MaquinaDeEstados(estado) {
-		switch (estado) {
+    async Run() {
 
-			case "EncontraCOMSimTemp":
+        const portDiscoverResult = await this.SimTemp.portDiscover({
+            request: this.SimTemp.Modbus.ReqReadDeviceID,
+            regex: this.SimTemp.Modbus.RegexReadDeviceID,
+            readTimeout: 100, tryNumber: 1, maxTries: 5
+        }, 1000)
 
-				//Executa código interno do if, apenas se não encontrou a COM anteriormente
-				if (sessionStorage.getItem("PortaCOM_SimuladorTemp") == null) {
+        if (!portDiscoverResult.sucess) { throw "Impossível comunicar com o simulador" }
 
-					//Procura porta COM que o simulador está conectado
-					this.SimTemp.getConnectedPortCom(this.SimTemp.ReqID, this.SimTemp.RegexID, (result, port) => {
+        if (!this.SimTemp.SetOutputConfig("J", 300, "A", true)) { throw "Falha ao configurar saída do simulador" }
+        const send300J = await this.SimTemp.SendOutputConfig()
 
-						//se encontrou a porta COM:
-						if (result) {
-							sessionStorage.setItem("PortaCOM_SimuladorTemp", port)
-							//segue o teste...
-						} else {
-							//seta devidas falhas, e segue o teste...
-						}
+        if (!send300J.result) { throw "Falha ao enviar configuração ao simulador" }
 
-					}, 500)
-				} else {
-					this.SimTemp.setPortCom(sessionStorage.getItem("PortaCOM_SimuladorTemp"))
-					//segue o teste...
-				}
-				break
+        if (!this.SimTemp.SetOutputConfig("J", 10, "A", true)) { throw "Falha ao configurar saída do simulador" }
+        const send10J = await this.SimTemp.SendOutputConfig()
 
-			case "Calibra10TipoJ":
+        if (!send10J.result) { throw "Falha ao enviar configuração ao simulador" }
 
-				//Manipula objeto de configuração de Output baseado nos parametros passados
-				this.SimTemp.SetOutputConfig((setRes) => {
+        const inputValues = await this.SimTemp.ReqInputValue()
+        console.log(inputValues)
 
-					//Se configuracao bem sucedida:
-					if (setRes.result) {
+        throw "termino"
 
-						//Tenta enviar configuracoes ao simulador
-						this.SimTemp.SendOutputConfig((sendRes) => {
-
-							//se envio bem sucedido:
-							if (sendRes.result) {
-								//segue o teste...
-							} else {
-								console.error(sendRes.msg)
-								//seta devidas falhas, e segue o teste...
-							}
-
-						})
-
-					} else {
-						console.error(setRes.msg)
-						//seta devidas falhas, e segue o teste...
-					}
-				}, "J", 10, "A")
-				break
-
-			case "Calibra750TipoJ":
-
-				//Manipula objeto de configuração de Output baseado nos parametros passados
-				this.SimTemp.SetOutputConfig((setRes) => {
-
-					//Se configuracao bem sucedida:
-					if (setRes.result) {
-
-						//Tenta enviar configuracoes ao simulador
-						this.SimTemp.SendOutputConfig((sendRes) => {
-
-							//se envio bem sucedido:
-							if (sendRes.result) {
-								//segue o teste...
-							} else {
-								console.error(sendRes.msg)
-								//seta devidas falhas, e segue o teste...
-							}
-
-						})
-
-					} else {
-						console.error(setRes.msg)
-						//seta devidas falhas, e segue o teste...
-					}
-				}, "J", 750, "A")
-				break
-		}
-	}
+    }
 }
 ```
+
 # Detalhes de Firmware e Hardware
 
 ## Interface Comunicacao

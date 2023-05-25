@@ -1,7 +1,7 @@
-class SimuladorTemp extends SerialPVI {
+class SimuladorTemp extends SerialReqManager {
 
-    constructor(baudRate = 9600, paridade = 2) {
-        super(baudRate, paridade)
+    constructor() {
+        super(9600, 2)
         this.FirmwareVersion = null
         this.Modbus = {
             RegexReadDeviceID: new RegExp("(01 2B 0E 04 81 00 00 01 02 05) ([0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2})"),
@@ -13,66 +13,25 @@ class SimuladorTemp extends SerialPVI {
             Address: {
                 Slave: "01",
                 HoldingRegister: {
-                    TipoSensor: "00 1E",
-                    ModoOperacao: "00 1F",
-                    Valor: "00 20",
-                    Grupo: "00 21",
-                    Compensacao: "00 22",
-                    ValorLeitura: "00 23",
-                    ValorAmbiente: "00 24"
+                    SensorType: "00 1E",
+                    Mode: "00 1F",
+                    Value: "00 20",
+                    Group: "00 21",
+                    Compensation: "00 22",
+                    InputValue: "00 23",
+                    Ambient: "00 24"
                 }
-            },
-            CRCConfig: {
-                Reverse: true,
-                ReturnFullString: true,
-                Poly: 0xA001,
-                Init: 0xFFFF
             }
         }
         this.OutputConfig = {
-            TipoSensor: "00 00",
-            ModoOperacao: "00 00",
-            Valor: "00 00",
-            Grupo: "00 00",
-            Compensacao: "00 00"
+            SensorType: "00 00",
+            Mode: "00 00",
+            Value: "00 00",
+            Group: "00 00",
+            Compensation: "00 00"
         }
     }
 
-    /**
-     * Requisita versao de firmware ao simulador de temperatura
-     * @param {function} callback 
-     * @param {number} timeOut 
-     */
-    ReqFirmwareVersion(callback, timeOut = 500) {
-
-        this.SendData(this.Modbus.ReqReadDeviceID, this.COMPORT)
-
-        setTimeout(() => {
-
-            let regexVersionGroup = 2
-            let byteData = this.ReadData(this.COMPORT).match(this.Modbus.RegexReadDeviceID)
-
-            if (byteData != null) {
-                let version = SerialPVI.ConvertAscii(byteData[regexVersionGroup]).replaceAll("\x00", "")
-                callback({
-                    "version": version,
-                    "msg": "Sucesso ao enviar a requisição"
-                })
-            } else {
-                callback({
-                    "version": null,
-                    "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-                })
-            }
-
-        }, timeOut)
-    }
-
-    /**
-     * Atribui a propriedade a versao do firmware do simulador
-     * @param {number} version 
-     * @returns true se conseguiu parsear, false se nao
-     */
     SetFirmware(version) {
         try {
             this.FirmwareVersion = Number.parseFloat(version)
@@ -82,14 +41,36 @@ class SimuladorTemp extends SerialPVI {
         }
     }
 
-    /**
-     * 
-     * @returns versao de firmware do simulador
-     * 
-     * OBS: Necessita previamente a utilizacao do metodo ReqFirmwareVersion()
-     */
     GetFirmware() {
         return this.FirmwareVersion
+    }
+
+    /**
+     * Requisita versao de firmware ao simulador de temperatura
+     */
+    async ReqFirmwareVersion() {
+
+        const versionResponse = await this.WatchForResponse({
+            request: this.Modbus.ReqReadDeviceID,
+            regex: this.Modbus.RegexReadDeviceID,
+            maxTries: 3, tryNumber: 1, readTimeout: 100
+        }, 1000)
+
+        let regexVersionGroup = 2
+
+        if (versionResponse.response != null) {
+            let version = SerialPVIUtil.ConvertAscii(versionResponse.response[regexVersionGroup]).replaceAll("\x00", "")
+            this.SetFirmware(version)
+            return {
+                "version": version,
+                "msg": "Sucesso ao enviar a requisição"
+            }
+        } else {
+            return {
+                "version": null,
+                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
+            }
+        }
     }
 
     /**
@@ -98,53 +79,52 @@ class SimuladorTemp extends SerialPVI {
      * Ex: SetOutputConfig("J", 300, "A", ()=>{ })
      * 
      * @param {string} sensor Opcoes: "J", "K", "mV"
-     * @param {number} valor Ranges: ___ J: [-10 - 760] __ K: [0 - 1150] __ mV: [0 - 100]
-     * @param {string} grupo Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
-     * @param {function} callback
+     * @param {number} value Ranges: ___ J: [-10 - 760] __ K: [0 - 1150] __ mV: [0 - 100]
+     * @param {string} group Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
      */
-    SetOutputConfig(callback, sensor, valor, grupo = "A", compensacao = false) {
+    SetOutputConfig(sensor, value, group = "A", compensation = false) {
 
         let result = true
         let msg = ""
-        compensacao ? this.OutputConfig.Compensacao = "00 01" : this.OutputConfig.Compensacao = "00 00"
-        this.OutputConfig.ModoOperacao = "00 00"
+        compensation ? this.OutputConfig.Compensation = "00 01" : this.OutputConfig.Compensation = "00 00"
+        this.OutputConfig.Mode = "00 00"
 
-        switch (grupo) {
+        switch (group) {
             case "A":
-                this.OutputConfig.Grupo = "00 00"
+                this.OutputConfig.Group = "00 00"
                 break
 
             case "B":
-                this.OutputConfig.Grupo = "00 01"
+                this.OutputConfig.Group = "00 01"
                 break
 
             case "C":
-                this.OutputConfig.Grupo = "00 02"
+                this.OutputConfig.Group = "00 02"
                 break
 
             case "D":
-                this.OutputConfig.Grupo = "00 03"
+                this.OutputConfig.Group = "00 03"
                 break
 
             case "E":
-                this.OutputConfig.Grupo = "00 04"
+                this.OutputConfig.Group = "00 04"
                 break
 
             case "F":
-                this.OutputConfig.Grupo = "00 05"
+                this.OutputConfig.Group = "00 05"
                 break
 
             case "G":
-                this.OutputConfig.Grupo = "00 06"
+                this.OutputConfig.Group = "00 06"
                 break
 
             case "H":
-                this.OutputConfig.Grupo = "00 07"
+                this.OutputConfig.Group = "00 07"
                 break
 
             default:
                 result = false
-                msg += "Grupo Inválido"
+                msg += "Group Inválido"
                 break
         }
 
@@ -152,45 +132,44 @@ class SimuladorTemp extends SerialPVI {
             switch (sensor) {
                 case "J":
 
-                    if (!isNaN(valor) && valor >= -10 && valor <= 760) {
+                    if (!isNaN(value) && value >= -10 && value <= 760) {
 
-                        this.OutputConfig.Valor = SerialPVI.DecimalToHex(valor)
-                        this.OutputConfig.TipoSensor = "00 00"
+                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
+                        this.OutputConfig.SensorType = "00 00"
                         result = true
                         msg += "Nova Configuração Recebida"
 
                     } else {
                         result = false
-                        msg += "Não é um número, ou valor fora do range [-10 - 760]"
+                        msg += "Não é um número, ou value fora do range [-10 - 760]"
                     }
-
                     break
 
                 case "K":
-                    if (!isNaN(valor) && valor >= 10 && valor <= 1150) {
+                    if (!isNaN(value) && value >= 10 && value <= 1150) {
 
-                        this.OutputConfig.Valor = SerialPVI.DecimalToHex(valor)
-                        this.OutputConfig.TipoSensor = "00 01"
+                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
+                        this.OutputConfig.SensorType = "00 01"
                         result = true
                         msg += "Nova Configuração Recebida"
 
                     } else {
                         result = false
-                        msg += "Não é um número, ou valor fora do range [10 - 1150]"
+                        msg += "Não é um número, ou value fora do range [10 - 1150]"
                     }
                     break
 
                 case "mV":
-                    if (!isNaN(valor) && valor >= 0 && valor <= 100) {
+                    if (!isNaN(value) && value >= 0 && value <= 100) {
 
-                        this.OutputConfig.Valor = SerialPVI.DecimalToHex(valor)
-                        this.OutputConfig.TipoSensor = "00 02"
+                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
+                        this.OutputConfig.SensorType = "00 02"
                         result = true
                         msg += "Nova Configuração Recebida"
 
                     } else {
                         result = false
-                        msg += "Não é um número, ou valor fora do range [0 - 100]"
+                        msg += "Não é um número, ou value fora do range [0 - 100]"
                     }
                     break
 
@@ -201,10 +180,10 @@ class SimuladorTemp extends SerialPVI {
             }
         }
 
-        callback({
+        return {
             "result": result,
             "msg": msg
-        })
+        }
     }
 
     /**
@@ -214,104 +193,105 @@ class SimuladorTemp extends SerialPVI {
      * @param {number} timeOut 
      * @param {object} config 
      */
-    SendOutputConfig(callback, timeOut = 500, config = this.OutputConfig) {
+    async SendOutputConfig(config = this.OutputConfig) {
 
         let regex = new RegExp("01 10 00 1E 00 05 60 0C")
         let nroRegisters = "00 05"
         let byteCount = "0A"
 
-        let requisicao = this.Modbus.Address.Slave + " "
+        let request = this.Modbus.Address.Slave + " "
             + this.Modbus.Function.WriteMultipleRegisters + " "
-            + this.Modbus.Address.HoldingRegister.TipoSensor + " "
+            + this.Modbus.Address.HoldingRegister.SensorType + " "
             + nroRegisters + " "
             + byteCount + " "
-            + config.TipoSensor + " "
-            + config.ModoOperacao + " "
-            + config.Valor + " "
-            + config.Grupo + " "
-            + config.Compensacao
+            + config.SensorType + " "
+            + config.Mode + " "
+            + config.Value + " "
+            + config.Group + " "
+            + config.Compensation
 
-        requisicao = CRC16.Calculate(requisicao, this.Modbus.CRCConfig.Reverse, this.Modbus.CRCConfig.ReturnFullString, this.Modbus.CRCConfig.Poly, this.Modbus.CRCConfig.Init)
+        request += ` ${CRC16.Modbus(request.split(" "), "string")}`
 
-        this.SendData(requisicao, this.COMPORT)
+        const sendResult = await this.WatchForResponse({
+            request: request,
+            regex: regex,
+            maxTries: 3, tryNumber: 1, readTimeout: 100
+        }, 1000)
 
-        setTimeout(() => {
-
-            let byteData = this.ReadData(this.COMPORT).match(regex)
-
-            if (byteData != null) {
-                callback({
-                    "result": true,
-                    "msg": "Sucesso ao enviar a requisição"
-                })
-            } else {
-                callback({
-                    "result": false,
-                    "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-                })
+        if (sendResult.response != null) {
+            return {
+                "result": true,
+                "msg": "Sucesso ao enviar a requisição"
             }
-
-        }, timeOut)
+        } else {
+            return {
+                "result": false,
+                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
+            }
+        }
     }
 
     /**
      * Retorna os valores lidos nas entradas do simulador [Temperatura ambiente e entrada de termopar]
      * 
-     * Na leitura de termopar, é retornado também em qual tipo de sensor o valor foi traduzido [Tipo J ou Tipo K]
+     * Na leitura de termopar, é retornado também em qual tipo de sensor o value foi traduzido [Tipo J ou Tipo K]
      * 
-     * @param {function} callback 
-     * @param {number} timeOut 
      */
-    ReqInputValue(callback, timeOut = 500) {
+    async ReqInputValue() {
 
         let regex = new RegExp("01 03 0E ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
-        let requisicao = "01 03 00 1E 00 07 64 0E"
+        let nroRegisters = "00 07"
+        let startAddress = this.Modbus.Address.HoldingRegister.SensorType
 
-        this.SendData(requisicao, this.COMPORT)
+        let request = this.Modbus.Address.Slave + " "
+            + this.Modbus.Function.ReadHoldingRegisters + " "
+            + startAddress + " "
+            + nroRegisters
 
-        setTimeout(() => {
+        request += ` ${CRC16.Modbus(request.split(" "), "string")}`
 
-            let byteData = this.ReadData(this.COMPORT).match(regex)
+        const inputValues = await this.WatchForResponse({
+            request: request,
+            regex: regex,
+            maxTries: 3, tryNumber: 1, readTimeout: 100
+        }, 1000)
 
-            if (byteData != null) {
+        if (inputValues.response != null) {
 
-                //indices registradores
-                let matchSensorIndex = 1
-                let matchInputIndex = 6
-                let matchAmbienteIndex = 7
+            let matchInputIndex = 6
+            let matchSensorIndex = 1
+            let matchAmbientIndex = 7
 
-                let sensor = CRCUtils.HextoDecimal(byteData[matchSensorIndex])
-                let valorInput = CRCUtils.HextoDecimal(byteData[matchInputIndex]) / 10
-                let valorAmbiente = CRCUtils.HextoDecimal(byteData[matchAmbienteIndex]) / 10
+            let sensor = SerialPVIUtil.HextoDecimal(inputValues.response[matchSensorIndex])
+            let ambient = SerialPVIUtil.HextoDecimal(inputValues.response[matchAmbientIndex]) / 10
+            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.response[matchInputIndex]) / 10
 
-                switch (sensor) {
-                    case 0:
-                        sensor = "J"
-                        break
-                    case 1:
-                        sensor = "K"
-                        break
-                    default:
-                        sensor = null
-                        break
-                }
-
-                callback({
-                    "result": true,
-                    "msg": "Sucesso ao obter valores",
-                    "sensor": sensor,
-                    "valorInput": valorInput,
-                    "valorAmbiente": valorAmbiente
-                })
-
-            } else {
-                callback({
-                    "result": false,
-                    "msg": "Falha ao obter valores"
-                })
+            switch (sensor) {
+                case 0:
+                    sensor = "J"
+                    break
+                case 1:
+                    sensor = "K"
+                    break
+                default:
+                    sensor = null
+                    break
             }
 
-        }, timeOut)
+            return {
+                "result": true,
+                "msg": "Sucesso ao obter valores",
+                "sensor": sensor,
+                "inputValue": inputValue,
+                "ambient": ambient
+            }
+
+        } else {
+            return {
+                "result": false,
+                "msg": "Falha ao obter valores"
+            }
+        }
     }
 }
 

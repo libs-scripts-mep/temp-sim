@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@libs-scripts-mep/crc": "^1.0.0",
-    "@libs-scripts-mep/serial-pvi": "^1.2.0"
+    "@libs-scripts-mep/serial-pvi": "^2.0.0"
   },
   "name": "@libs-scripts-mep/temp-sim",
   "description": "Biblioteca que auxilia no gerenciamento do simulador de temperatura inova",
