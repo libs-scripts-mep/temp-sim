@@ -4,88 +4,39 @@ Biblioteca que controla o simulador de temperatura inova.
 
 ![Image](https://i.imgur.com/HWpENJX.png)
 
-## Tabela de Compatibilidade
-
-| Firmware |       |
-| -------- | :---: |
-| v2.21    |   ✔️   |
-
-| PCI       |       |
-| --------- | :---: |
-| M1PL2_2.0 |   ✔️   |
-
 ## Instalando
 
-Abra o terminal, e na pasta do script, execute:
+Abra o terminal, e na pasta raíz do script, execute:
 
 ```
 npm i @libs-scripts-mep/temp-sim
 ```
 
-Após fianlizada a instalação da biblioteca, inclua em seu html:
+## Desinstalando
 
-```html
-<script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
+Abra o terminal, e na pasta raíz do script, execute:
+
+```
+npm uninstall @libs-scripts-mep/temp-sim
 ```
 
-<br>
+## Atualizando
 
-> ⚠️ Se seu projeto não utiliza a [serial-pvi](https://www.npmjs.com/package/@libs-scripts-mep/serial-pvi) ou [crc](https://www.npmjs.com/package/@libs-scripts-mep/crc), será necessário incluir também em seu html:
+Abra o terminal, e na pasta raíz do script, execute:
 
-```html
-<!-- DEPENDENCIAS -->
-<script src="node_modules/@libs-scripts-mep/crc/CRC.js"></script>
-<script src="node_modules/@libs-scripts-mep/serial-pvi/serial-pvi.js"></script>
-<!-- BIBLIOTECA -->
-<script src="node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"></script>
+```
+npm update @libs-scripts-mep/temp-sim
 ```
 
-> ⚠️Fique atento à ordem de carregamento dos arquivos, as dependências devem ser carregadas **ANTES** da biblioteca, como no trecho acima.
+## Como utilizar
 
-## Exemplo de Utilização
+Realize a importação:
 
 ```js
-class TestScript {
-    constructor(eventMap, event) {
-        this.SimTemp = new SimuladorTemp()
-
-        this.Run()
-            .then(async () => {
-                //se tudo OK
-            })
-            .catch((error) => {
-                //se algo NOK
-            })
-    }
-
-    async Run() {
-
-        const portDiscoverResult = await this.SimTemp.portDiscover({
-            request: this.SimTemp.Modbus.ReqReadDeviceID,
-            regex: this.SimTemp.Modbus.RegexReadDeviceID,
-            readTimeout: 100, tryNumber: 1, maxTries: 5
-        }, 1000)
-
-        if (!portDiscoverResult.sucess) { throw "Impossível comunicar com o simulador" }
-
-        if (!this.SimTemp.SetOutputConfig("J", 300, "A", true)) { throw "Falha ao configurar saída do simulador" }
-        const send300J = await this.SimTemp.SendOutputConfig()
-
-        if (!send300J.result) { throw "Falha ao enviar configuração ao simulador" }
-
-        if (!this.SimTemp.SetOutputConfig("J", 10, "A", true)) { throw "Falha ao configurar saída do simulador" }
-        const send10J = await this.SimTemp.SendOutputConfig()
-
-        if (!send10J.result) { throw "Falha ao enviar configuração ao simulador" }
-
-        const inputValues = await this.SimTemp.ReqInputValue()
-        console.log(inputValues)
-
-        throw "termino"
-
-    }
-}
+import SimuladorTemp from "../node_modules/@libs-scripts-mep/temp-sim/temp-sim.js"
 ```
+
+As demais informações e instruções estarão disponíveis via `JSDocs`.
 
 # Detalhes de Firmware e Hardware
 

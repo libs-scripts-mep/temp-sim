@@ -1,4 +1,14 @@
-class SimuladorTemp extends SerialReqManager {
+import { CRC16 } from "../crc/CRC.js"
+import { SerialReqManager, SerialPVIUtil } from "../serial-pvi/serial-pvi.js"
+
+/**
+ * # Exemplos
+ * 
+ * ```js
+ * const simTemp = new SimuladorTemp()
+ * ```
+ */
+export default class SimuladorTemp extends SerialReqManager {
 
     constructor() {
         super(9600, 2)
@@ -33,21 +43,13 @@ class SimuladorTemp extends SerialReqManager {
     }
 
     SetFirmware(version) {
-        try {
-            this.FirmwareVersion = Number.parseFloat(version)
-            return true
-        } catch (e) {
-            return false
-        }
+        try { this.FirmwareVersion = Number.parseFloat(version); return true }
+        catch (e) { return false }
     }
 
-    GetFirmware() {
-        return this.FirmwareVersion
-    }
+    GetFirmware() { return this.FirmwareVersion }
 
-    /**
-     * Requisita versao de firmware ao simulador de temperatura
-     */
+    /**Requisita versao de firmware ao simulador de temperatura*/
     async ReqFirmwareVersion() {
 
         const versionResponse = await this.WatchForResponse({
@@ -74,13 +76,33 @@ class SimuladorTemp extends SerialReqManager {
     }
 
     /**
-     * Manipula objeto de configuração de Output baseado nos parametros passados
+     * Manipula objeto de configuração de Output
      * 
-     * Ex: SetOutputConfig("J", 300, "A", ()=>{ })
+     * @param {String} sensor tipo de sensor que será simulado
+     * @param {Number} value Valor para simulação
+     * @param {String} group Seleção de grupo do simulador
+     * @param {Boolean} compensation Habilita compensação interna
+     * @returns Object
      * 
-     * @param {string} sensor Opcoes: "J", "K", "mV"
-     * @param {number} value Ranges: ___ J: [-10 - 760] __ K: [0 - 1150] __ mV: [0 - 100]
-     * @param {string} group Opcoes: "A", "B", "C", "D", "E", "F", "G", "H"
+     * # Exemplos
+     * 
+     * ```js
+     * const simTemp = new SimuladorTemp()
+     * simTemp.SetOutputConfig("J", 715, "A", false)
+     * ```
+     * 
+     * ## Opções de simulação e ranges possíveis
+     * 
+     * `Termpoar tipo J` -10 ~ 760
+     * 
+     * `Termpoar tipo  K` 0 ~ 1150
+     * 
+     * `Tensão mV` 0 ~ 100
+     * 
+     * # Retorno
+     * ```js
+     * { result: Boolean, msg: String }
+     * ```
      */
     SetOutputConfig(sensor, value, group = "A", compensation = false) {
 
@@ -189,9 +211,21 @@ class SimuladorTemp extends SerialReqManager {
     /**
      * Envia objeto de configuração passado como parametro ao simulador de temperatura
      * 
-     * @param {function} callback 
-     * @param {number} timeOut 
-     * @param {object} config 
+     * @param {Object} config 
+     * @returns Object
+     * 
+     * # Exemplos
+     * 
+     * ```js
+     * const simTemp = new SimuladorTemp()
+     * simTemp.SetOutputConfig("J", 715, "A", false)
+     * const result = await simTemp.SendOutputConfig()
+     * ```
+     * 
+     * # Result
+     * ```js
+     * { result: Boolean, msg: String }
+     * ```
      */
     async SendOutputConfig(config = this.OutputConfig) {
 
@@ -232,9 +266,16 @@ class SimuladorTemp extends SerialReqManager {
     }
 
     /**
-     * Retorna os valores lidos nas entradas do simulador [Temperatura ambiente e entrada de termopar]
+     * Retorna os valores lidos nas entradas do simulador.
      * 
-     * Na leitura de termopar, é retornado também em qual tipo de sensor o value foi traduzido [Tipo J ou Tipo K]
+     * ⚠️ O valor convertido retornado estará de acrodo com o tipo de sensor configurado para leitura!
+     * 
+     * # Exemplos
+     * 
+     * ```js
+     * const simTemp = new SimuladorTemp()
+     * const result = await simTemp.ReqInputValue()
+     * ```
      * 
      */
     async ReqInputValue() {
