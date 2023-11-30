@@ -303,9 +303,9 @@ export default class SimuladorTemp extends SerialReqManager {
             let matchSensorIndex = 1
             let matchAmbientIndex = 7
 
-            let sensor = SerialPVIUtil.HextoDecimal(inputValues.response[matchSensorIndex])
-            let ambient = SerialPVIUtil.HextoDecimal(inputValues.response[matchAmbientIndex]) / 10
-            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.response[matchInputIndex]) / 10
+            let sensor = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchSensorIndex])
+            let ambient = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchAmbientIndex]) / 10
+            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchInputIndex]) / 10
 
             switch (sensor) {
                 case 0:
