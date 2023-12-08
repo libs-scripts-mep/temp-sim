@@ -1,5 +1,6 @@
-import { CRC16 } from "../crc/CRC.js"
-import { SerialReqManager, SerialPVIUtil } from "../serial-pvi/serial-pvi.js"
+import { SerialUtil } from "../serialport-websocket/serial.js"
+import { Socket } from "../serialport-websocket/client.js"
+import { Modbus } from "../serialport-websocket/modbus.js"
 
 /**
  * # Exemplos
@@ -8,71 +9,53 @@ import { SerialReqManager, SerialPVIUtil } from "../serial-pvi/serial-pvi.js"
  * const simTemp = new SimuladorTemp()
  * ```
  */
-export default class SimuladorTemp extends SerialReqManager {
+export default class SimuladorTemp {
+    static Modbus = new Modbus(9600, "Cappinho", undefined, 'even')
+    static NodeAddress = 0x01
 
-    constructor() {
-        super(9600, 2)
-        this.FirmwareVersion = null
-        this.Modbus = {
-            RegexReadDeviceID: new RegExp("(01 2B 0E 04 81 00 00 01 02 05) ([0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2})"),
-            ReqReadDeviceID: "01 2B 0E 04 02 F2 E6",
-            Function: {
-                WriteMultipleRegisters: "10",
-                ReadHoldingRegisters: "03"
-            },
-            Address: {
-                Slave: "01",
-                HoldingRegister: {
-                    SensorType: "00 1E",
-                    Mode: "00 1F",
-                    Value: "00 20",
-                    Group: "00 21",
-                    Compensation: "00 22",
-                    InputValue: "00 23",
-                    Ambient: "00 24"
-                }
-            }
-        }
-        this.OutputConfig = {
-            SensorType: "00 00",
-            Mode: "00 00",
-            Value: "00 00",
-            Group: "00 00",
-            Compensation: "00 00"
+    static ReqReadDeviceID = "012B0E0401B2E7"
+    static RegexReadDeviceID = new RegExp("012B0E0481000001010A494E562D434150504F00AA39")
+
+    static Sensors = {
+        J: { value: 0x00, min: -10, max: 760 },
+        K: { value: 0x01, min: 10, max: 1150 },
+        mV: { value: 0x02, min: 0, max: 100 }
+    }
+    static Groups = { A: 0x00, B: 0x01, C: 0x02, D: 0x03, E: 0x04, F: 0x05, G: 0x06, H: 0x07 }
+
+    static Addr = {
+        HoldingRegister: {
+            SensorType: 30,//0x1E,
+            Mode: 31,//0x1F,
+            Value: 32,//0x20,
+            Group: 33,//0x21,
+            Compensation: 34,//0x22,
+            InputValue: 35,//0x23,
+            Ambient: 36,//0x2,
         }
     }
 
-    SetFirmware(version) {
-        try { this.FirmwareVersion = Number.parseFloat(version); return true }
-        catch (e) { return false }
+    static OutputConfig = {
+        SensorType: 0x00,
+        Mode: 0x00,
+        Value: 0x00,
+        Group: 0x00,
+        Compensation: 0x0,
     }
 
-    GetFirmware() { return this.FirmwareVersion }
+    static async Connect() {
+        while (!Socket.IO.connected) { await SerialUtil.Delay(1000); console.log(`SimuladorTemp: Aguardando conexão com server...`) }
 
-    /**Requisita versao de firmware ao simulador de temperatura*/
-    async ReqFirmwareVersion() {
+        const discover = await this.Modbus.portDiscover({ request: this.ReqReadDeviceID, regex: this.RegexReadDeviceID }, { manufacturer: "FTDI" })
+        if (!discover.success) { return { success: false, msg: discover.msg } }
 
-        const versionResponse = await this.WatchForResponse({
-            request: this.Modbus.ReqReadDeviceID,
-            regex: this.Modbus.RegexReadDeviceID,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
-        }, 1000)
+        const create = await this.Modbus.create()
+        if (!create.success) { return { success: false, msg: create.msg } }
 
-        let regexVersionGroup = 2
+        const setAddr = await this.Modbus.setNodeAddress(this.NodeAddress)
+        if (!setAddr.success) { return { success: false, msg: setAddr.msg } }
 
-        if (versionResponse.response != null) {
-            let version = SerialPVIUtil.ConvertAscii(versionResponse.response[regexVersionGroup]).replaceAll("\x00", "")
-            this.SetFirmware(version)
-            return {
-                "version": version,
-                "msg": "Sucesso ao enviar a requisição"
-            }
-        } else {
-            return {
-                "version": null,
-                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-            }
-        }
+        return { success: false, msg: `SimuladorTemp: Conexão bem sucedida` }
     }
 
     /**
@@ -87,8 +70,7 @@ export default class SimuladorTemp extends SerialReqManager {
      * # Exemplos
      * 
      * ```js
-     * const simTemp = new SimuladorTemp()
-     * simTemp.SetOutputConfig("J", 715, "A", false)
+     * SimuladorTemp.SetOutputConfig("J", 715, "A", false)
      * ```
      * 
      * ## Opções de simulação e ranges possíveis
@@ -101,111 +83,23 @@ export default class SimuladorTemp extends SerialReqManager {
      * 
      * # Retorno
      * ```js
-     * { result: Boolean, msg: String }
+     * { success: Boolean, msg: String }
      * ```
      */
-    SetOutputConfig(sensor, value, group = "A", compensation = false) {
+    static SetOutputConfig(sensor, value, group = "A", compensation = false) {
 
-        let result = true
-        let msg = ""
-        compensation ? this.OutputConfig.Compensation = "00 01" : this.OutputConfig.Compensation = "00 00"
-        this.OutputConfig.Mode = "00 00"
+        if (isNaN(value)) { return { success: false, msg: `Valor de temperatura não é um número: ${value}` } }
+        if (!this.Groups.hasOwnProperty(group)) { return { success: false, msg: `Valor de grupo é inválido: ${group}` } }
+        if (!this.Sensors.hasOwnProperty(sensor)) { return { success: false, msg: `Valor de sensor é inválido: ${sensor}` } }
+        if (!(value >= this.Sensors[sensor].min && value <= this.Sensors[sensor].max)) { return { success: false, msg: `Valor de temperatura fora do range: [ ${this.Sensors[sensor].min} : ${this.Sensors[sensor].max} ]` } }
 
-        switch (group) {
-            case "A":
-                this.OutputConfig.Group = "00 00"
-                break
+        this.OutputConfig.Mode = 0x00
+        this.OutputConfig.Value = value
+        this.OutputConfig.Group = this.Groups[group]
+        this.OutputConfig.SensorType = this.Sensors[sensor].value
+        compensation ? this.OutputConfig.Compensation = 0x01 : this.OutputConfig.Compensation = 0x00
 
-            case "B":
-                this.OutputConfig.Group = "00 01"
-                break
-
-            case "C":
-                this.OutputConfig.Group = "00 02"
-                break
-
-            case "D":
-                this.OutputConfig.Group = "00 03"
-                break
-
-            case "E":
-                this.OutputConfig.Group = "00 04"
-                break
-
-            case "F":
-                this.OutputConfig.Group = "00 05"
-                break
-
-            case "G":
-                this.OutputConfig.Group = "00 06"
-                break
-
-            case "H":
-                this.OutputConfig.Group = "00 07"
-                break
-
-            default:
-                result = false
-                msg += "Group Inválido"
-                break
-        }
-
-        if (result) {
-            switch (sensor) {
-                case "J":
-
-                    if (!isNaN(value) && value >= -10 && value <= 760) {
-
-                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
-                        this.OutputConfig.SensorType = "00 00"
-                        result = true
-                        msg += "Nova Configuração Recebida"
-
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou value fora do range [-10 - 760]"
-                    }
-                    break
-
-                case "K":
-                    if (!isNaN(value) && value >= 10 && value <= 1150) {
-
-                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
-                        this.OutputConfig.SensorType = "00 01"
-                        result = true
-                        msg += "Nova Configuração Recebida"
-
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou value fora do range [10 - 1150]"
-                    }
-                    break
-
-                case "mV":
-                    if (!isNaN(value) && value >= 0 && value <= 100) {
-
-                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
-                        this.OutputConfig.SensorType = "00 02"
-                        result = true
-                        msg += "Nova Configuração Recebida"
-
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou value fora do range [0 - 100]"
-                    }
-                    break
-
-                default:
-                    result = false
-                    msg += "Sensor Inválido"
-                    break
-            }
-        }
-
-        return {
-            "result": result,
-            "msg": msg
-        }
+        return { success: true, msg: `Nova configuração recebida` }
     }
 
     /**
@@ -217,9 +111,8 @@ export default class SimuladorTemp extends SerialReqManager {
      * # Exemplos
      * 
      * ```js
-     * const simTemp = new SimuladorTemp()
-     * simTemp.SetOutputConfig("J", 715, "A", false)
-     * const result = await simTemp.SendOutputConfig()
+     * SimuladorTemp.SetOutputConfig("J", 715, "A", false)
+     * const result = await SimuladorTemp.SendOutputConfig()
      * ```
      * 
      * # Result
@@ -227,42 +120,15 @@ export default class SimuladorTemp extends SerialReqManager {
      * { result: Boolean, msg: String }
      * ```
      */
-    async SendOutputConfig(config = this.OutputConfig) {
-
-        let regex = new RegExp("01 10 00 1E 00 05 60 0C")
-        let nroRegisters = "00 05"
-        let byteCount = "0A"
-
-        let request = this.Modbus.Address.Slave + " "
-            + this.Modbus.Function.WriteMultipleRegisters + " "
-            + this.Modbus.Address.HoldingRegister.SensorType + " "
-            + nroRegisters + " "
-            + byteCount + " "
-            + config.SensorType + " "
-            + config.Mode + " "
-            + config.Value + " "
-            + config.Group + " "
-            + config.Compensation
-
-        request += ` ${CRC16.Modbus(request.split(" "), "string")}`
-
-        const sendResult = await this.WatchForResponse({
-            request: request,
-            regex: regex,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
-        }, 1000)
-
-        if (sendResult.response != null) {
-            return {
-                "result": true,
-                "msg": "Sucesso ao enviar a requisição"
-            }
-        } else {
-            return {
-                "result": false,
-                "msg": "Falha ao enviar a requisição - Simulador não reconheceu comando"
-            }
-        }
+    static async SendOutputConfig() {
+        return await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.SensorType,
+            [
+                this.OutputConfig.SensorType,
+                this.OutputConfig.Mode,
+                this.OutputConfig.Value,
+                this.OutputConfig.Group,
+                this.OutputConfig.Compensation
+            ])
     }
 
     /**
@@ -273,66 +139,47 @@ export default class SimuladorTemp extends SerialReqManager {
      * # Exemplos
      * 
      * ```js
-     * const simTemp = new SimuladorTemp()
-     * const result = await simTemp.ReqInputValue()
+     * const result = await SimuladorTemp.ReqInputValue()
      * ```
      * 
      */
-    async ReqInputValue() {
+    static async ReqInputValue() {
 
-        let regex = new RegExp("01 03 0E ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
-        let nroRegisters = "00 07"
-        let startAddress = this.Modbus.Address.HoldingRegister.SensorType
+        const result = await this.Modbus.ReadHoldingRegisters(30, 7)
 
-        let request = this.Modbus.Address.Slave + " "
-            + this.Modbus.Function.ReadHoldingRegisters + " "
-            + startAddress + " "
-            + nroRegisters
+        if (result.success) {
 
-        request += ` ${CRC16.Modbus(request.split(" "), "string")}`
+            const sensor = result.msg[0]
+            const inputValue = result.msg[5] / 10
+            const ambient = result.msg[6] / 10
 
-        const inputValues = await this.WatchForResponse({
-            request: request,
-            regex: regex,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
-        }, 1000)
-
-        if (inputValues.response != null) {
-
-            let matchInputIndex = 6
-            let matchSensorIndex = 1
-            let matchAmbientIndex = 7
-
-            let sensor = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchSensorIndex])
-            let ambient = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchAmbientIndex]) / 10
-            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.matchResult[matchInputIndex]) / 10
-
-            switch (sensor) {
-                case 0:
-                    sensor = "J"
-                    break
-                case 1:
-                    sensor = "K"
-                    break
-                default:
-                    sensor = null
-                    break
-            }
+            let sensorName = ""
+            Object.entries(this.Sensors).forEach((props) => {
+                if (props[1].value == sensor) { sensorName = props[0] }
+            })
 
             return {
-                "result": true,
-                "msg": "Sucesso ao obter valores",
-                "sensor": sensor,
-                "inputValue": inputValue,
-                "ambient": ambient
+                result: true,
+                msg: "Sucesso ao obter valores",
+                sensor: sensorName,
+                inputValue: inputValue,
+                ambient: ambient
             }
 
         } else {
             return {
-                "result": false,
-                "msg": "Falha ao obter valores"
+                result: true,
+                msg: "Falha ao obter valores",
+                sensor: null,
+                inputValue: null,
+                ambient: null
             }
         }
+    }
+
+    static {
+        window.SimuladorTemp = SimuladorTemp
+        SimuladorTemp.Connect()
     }
 }
 
