@@ -168,7 +168,7 @@ export default class SimuladorTemp {
 
         } else {
             return {
-                result: true,
+                result: false,
                 msg: "Falha ao obter valores",
                 sensor: null,
                 inputValue: null,
