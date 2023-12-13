@@ -55,7 +55,7 @@ export default class SimuladorTemp {
         const setAddr = await this.Modbus.setNodeAddress(this.NodeAddress)
         if (!setAddr.success) { return { success: false, msg: setAddr.msg } }
 
-        return { success: false, msg: `SimuladorTemp: Conexão bem sucedida` }
+        return { success: true, msg: `SimuladorTemp: Conexão bem sucedida` }
     }
 
     /**
@@ -179,7 +179,6 @@ export default class SimuladorTemp {
 
     static {
         window.SimuladorTemp = SimuladorTemp
-        SimuladorTemp.Connect()
     }
 }
 
