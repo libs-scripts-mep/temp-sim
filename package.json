@@ -1,11 +1,7 @@
 {
   "name": "@libs-scripts-mep/temp-sim",
   "description": "Biblioteca que auxilia no gerenciamento do simulador de temperatura inova",
-<<<<<<< HEAD
   "version": "5.1.0",
-=======
-  "version": "5.0.2",
->>>>>>> b59bbd34632affe92b8632625632758ee6f3583a
   "main": "temp-sim.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
