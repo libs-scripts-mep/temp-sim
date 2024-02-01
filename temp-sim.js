@@ -55,7 +55,10 @@ export default class SimuladorTemp {
         const setAddr = await this.Modbus.setNodeAddress(this.NodeAddress)
         if (!setAddr.success) { return { success: false, msg: setAddr.msg } }
 
-        return { success: false, msg: `SimuladorTemp: Conexão bem sucedida` }
+        const test = await this.ReqInputValue()
+        if (!test.result) { return { success: false, msg: `SimuladorTemp: Falha ao estabelecer conexão` } }
+
+        return { success: true, msg: `SimuladorTemp: Conexão bem sucedida` }
     }
 
     /**
@@ -163,7 +166,8 @@ export default class SimuladorTemp {
                 msg: "Sucesso ao obter valores",
                 sensor: sensorName,
                 inputValue: inputValue,
-                ambient: ambient
+                ambient: ambient,
+                inputValueNotCompensated: inputValue - ambient
             }
 
         } else {
@@ -172,14 +176,12 @@ export default class SimuladorTemp {
                 msg: "Falha ao obter valores",
                 sensor: null,
                 inputValue: null,
-                ambient: null
+                ambient: null,
+                inputValueNotCompensated: null
             }
         }
     }
 
-    static {
-        window.SimuladorTemp = SimuladorTemp
-        SimuladorTemp.Connect()
-    }
+    static { window.SimuladorTemp = SimuladorTemp }
 }
 
