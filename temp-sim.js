@@ -10,28 +10,25 @@ import { Modbus } from "../serialport-websocket/modbus.js"
  * ```
  */
 export default class SimuladorTemp {
-    static Modbus = new Modbus(9600, "Cappinho", undefined, 'even')
+    static Modbus = new Modbus(9600, "Cappinho", undefined, 'none')
     static NodeAddress = 0x01
 
     static ReqReadDeviceID = "012B0E0401B2E7"
-    static RegexReadDeviceID = new RegExp("012B0E0481000001010A494E562D434150504F00AA39")
+    static RegexReadDeviceID = new RegExp("012B0E04810000010109494E562D436170706FBEB7")
 
     static Sensors = {
         J: { value: 0x00, min: -10, max: 760 },
-        K: { value: 0x01, min: 10, max: 1150 },
-        mV: { value: 0x02, min: 0, max: 100 }
+        K: { value: 0x01, min: 10, max: 1150 }
     }
-    static Groups = { A: 0x00, B: 0x01, C: 0x02, D: 0x03, E: 0x04, F: 0x05, G: 0x06, H: 0x07 }
 
     static Addr = {
         HoldingRegister: {
-            SensorType: 30,//0x1E,
-            Mode: 31,//0x1F,
-            Value: 32,//0x20,
-            Group: 33,//0x21,
-            Compensation: 34,//0x22,
-            InputValue: 35,//0x23,
-            Ambient: 36,//0x2,
+            SensorType: 8194,//0x2002, j ou k
+            Mode: 8195,//0x2003, saída é 0, entrada é 1
+            Value: 8196,//0x2004,
+            Compensation: 8198,//0x2006, 
+            InputValue: 12289,//0x3001,
+            Ambient: 12290,//0x3002,
         }
     }
 
@@ -39,8 +36,7 @@ export default class SimuladorTemp {
         SensorType: 0x00,
         Mode: 0x00,
         Value: 0x00,
-        Group: 0x00,
-        Compensation: 0x0,
+        Compensation: 0x00,
     }
 
     static async Connect() {
@@ -57,6 +53,8 @@ export default class SimuladorTemp {
 
         const test = await this.ReqInputValue()
         if (!test.result) { return { success: false, msg: `SimuladorTemp: Falha ao estabelecer conexão` } }
+
+        console.log(`SimuladorTemp: Conexão bem sucedida`)
 
         return { success: true, msg: `SimuladorTemp: Conexão bem sucedida` }
     }
@@ -92,13 +90,11 @@ export default class SimuladorTemp {
     static SetOutputConfig(sensor, value, group = "A", compensation = false) {
 
         if (isNaN(value)) { return { success: false, msg: `Valor de temperatura não é um número: ${value}` } }
-        if (!this.Groups.hasOwnProperty(group)) { return { success: false, msg: `Valor de grupo é inválido: ${group}` } }
         if (!this.Sensors.hasOwnProperty(sensor)) { return { success: false, msg: `Valor de sensor é inválido: ${sensor}` } }
         if (!(value >= this.Sensors[sensor].min && value <= this.Sensors[sensor].max)) { return { success: false, msg: `Valor de temperatura fora do range: [ ${this.Sensors[sensor].min} : ${this.Sensors[sensor].max} ]` } }
 
         this.OutputConfig.Mode = 0x00
         this.OutputConfig.Value = value
-        this.OutputConfig.Group = this.Groups[group]
         this.OutputConfig.SensorType = this.Sensors[sensor].value
         compensation ? this.OutputConfig.Compensation = 0x01 : this.OutputConfig.Compensation = 0x00
 
@@ -124,15 +120,17 @@ export default class SimuladorTemp {
      * ```
      */
     static async SendOutputConfig() {
-        return await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.SensorType,
+        await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.SensorType,
             [
                 this.OutputConfig.SensorType,
                 this.OutputConfig.Mode,
-                this.OutputConfig.Value,
-                this.OutputConfig.Group,
-                this.OutputConfig.Compensation
-            ])
+                this.OutputConfig.Value
+            ], 1, 10)
+
+            return await this.Modbus.WriteSingleRegister(this.Addr.HoldingRegister.Compensation, this.OutputConfig.Compensation)
+
     }
+
 
     /**
      * Retorna os valores lidos nas entradas do simulador.
@@ -148,18 +146,24 @@ export default class SimuladorTemp {
      */
     static async ReqInputValue() {
 
-        const result = await this.Modbus.ReadHoldingRegisters(30, 7)
-
-        if (result.success) {
+        const resultado = await this.Modbus.ReadInputRegisters(12289, 2)
+        console.log(resultado)
+        const result = await this.Modbus.ReadHoldingRegisters(8194,1)
+        console.log(result)
+    
+        if (resultado.success&&result.success) {
 
             const sensor = result.msg[0]
-            const inputValue = result.msg[5] / 10
-            const ambient = result.msg[6] / 10
-
+            console.log(sensor)
             let sensorName = ""
-            Object.entries(this.Sensors).forEach((props) => {
-                if (props[1].value == sensor) { sensorName = props[0] }
-            })
+            if (sensor == 0x00) { sensorName = "J" } else { sensorName = "K" }
+            console.log(sensorName)
+            
+            const inputValue = resultado.msg[0]
+            console.log(inputValue)
+            const ambient = resultado.msg[1]/10
+            console.log(ambient)
+
 
             return {
                 result: true,
@@ -180,8 +184,9 @@ export default class SimuladorTemp {
                 inputValueNotCompensated: null
             }
         }
+
+
     }
 
     static { window.SimuladorTemp = SimuladorTemp }
 }
-
