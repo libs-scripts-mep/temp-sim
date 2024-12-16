@@ -26,7 +26,7 @@ export default class SimuladorTemp {
             SensorType: 8194,//0x2002, j ou k
             Mode: 8195,//0x2003, saída é 0, entrada é 1
             Value: 8196,//0x2004,
-            Compensation: 8198,//0x2006, 
+            Compensation: 8197,//0x2005, 
             InputValue: 12289,//0x3001,
             Ambient: 12290,//0x3002,
         }
@@ -120,14 +120,14 @@ export default class SimuladorTemp {
      * ```
      */
     static async SendOutputConfig() {
-        await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.SensorType,
+        return await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.SensorType,
             [
                 this.OutputConfig.SensorType,
                 this.OutputConfig.Mode,
-                this.OutputConfig.Value
-            ], 1, 10)
+                this.OutputConfig.Value,
+                this.OutputConfig.Compensation
 
-            return await this.Modbus.WriteSingleRegister(this.Addr.HoldingRegister.Compensation, this.OutputConfig.Compensation)
+            ], 1, 10)
 
     }
 
@@ -146,22 +146,22 @@ export default class SimuladorTemp {
      */
     static async ReqInputValue() {
 
-        const inputValueAmbient = await this.Modbus.ReadInputRegisters(12289, 2)
-        console.log(inputValueAmbient)
-        const SensorType = await this.Modbus.ReadHoldingRegisters(8194,1)
-        console.log(SensorType)
+        const resultado = await this.Modbus.ReadInputRegisters(12289, 2)
+        console.log(resultado)
+        const result = await this.Modbus.ReadHoldingRegisters(8194,1)
+        console.log(result)
     
-        if (inputValueAmbient.success&&SensorType.success) {
+        if (resultado.success&&result.success) {
 
-            const sensor = SensorType.msg[0]
+            const sensor = result.msg[0]
             console.log(sensor)
             let sensorName = ""
             if (sensor == 0x00) { sensorName = "J" } else { sensorName = "K" }
             console.log(sensorName)
             
-            const inputValue = inputValueAmbient.msg[0]
+            const inputValue = resultado.msg[0]
             console.log(inputValue)
-            const ambient = inputValueAmbient.msg[1]/10
+            const ambient = resultado.msg[1]/10
             console.log(ambient)
 
 
@@ -188,5 +188,7 @@ export default class SimuladorTemp {
 
     }
 
+
     static { window.SimuladorTemp = SimuladorTemp }
 }
+
