@@ -1,25 +1,29 @@
+
 class SimuladorTemp extends SerialReqManager {
 
     constructor() {
-        super(9600, 2)
+        super(9600, 0)
+        this.MAX_TRIES = 10
+
         this.FirmwareVersion = null
         this.Modbus = {
-            RegexReadDeviceID: new RegExp("(01 2B 0E 04 81 00 00 01 02 05) ([0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2} [0-9|A-F]{2})"),
-            ReqReadDeviceID: "01 2B 0E 04 02 F2 E6",
+            RegexReadDeviceID: new RegExp("01 2B 0E 04 81 00 00 01 01 09 49 4E 56 2D 43 61 70 70 6F BE B7"),
+            ReqReadDeviceID: "01 2B 0E 04 01 B2 E7",
             Function: {
                 WriteMultipleRegisters: "10",
-                ReadHoldingRegisters: "03"
+                WriteSingleRegister: "06",
+                ReadHoldingRegisters: "03",
+                ReadInputRegisters: "04"
             },
             Address: {
                 Slave: "01",
                 HoldingRegister: {
-                    SensorType: "00 1E",
-                    Mode: "00 1F",
-                    Value: "00 20",
-                    Group: "00 21",
-                    Compensation: "00 22",
-                    InputValue: "00 23",
-                    Ambient: "00 24"
+                    SensorType: "20 02",
+                    Mode: "20 03",
+                    Value: "20 04",
+                    Compensation: "20 05",
+                    InputValue: "30 01",
+                    Ambient: "30 02"
                 }
             }
         }
@@ -27,7 +31,6 @@ class SimuladorTemp extends SerialReqManager {
             SensorType: "00 00",
             Mode: "00 00",
             Value: "00 00",
-            Group: "00 00",
             Compensation: "00 00"
         }
     }
@@ -53,7 +56,7 @@ class SimuladorTemp extends SerialReqManager {
         const versionResponse = await this.WatchForResponse({
             request: this.Modbus.ReqReadDeviceID,
             regex: this.Modbus.RegexReadDeviceID,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
+            maxTries: this.MAX_TRIES, tryNumber: 1, readTimeout: 100
         }, 1000)
 
         let regexVersionGroup = 2
@@ -159,20 +162,6 @@ class SimuladorTemp extends SerialReqManager {
                     }
                     break
 
-                case "mV":
-                    if (!isNaN(value) && value >= 0 && value <= 100) {
-
-                        this.OutputConfig.Value = SerialPVIUtil.DecimalToHex(value)
-                        this.OutputConfig.SensorType = "00 02"
-                        result = true
-                        msg += "Nova Configuração Recebida"
-
-                    } else {
-                        result = false
-                        msg += "Não é um número, ou value fora do range [0 - 100]"
-                    }
-                    break
-
                 default:
                     result = false
                     msg += "Sensor Inválido"
@@ -195,9 +184,9 @@ class SimuladorTemp extends SerialReqManager {
      */
     async SendOutputConfig(config = this.OutputConfig) {
 
-        let regex = new RegExp("01 10 00 1E 00 05 60 0C")
-        let nroRegisters = "00 05"
-        let byteCount = "0A"
+        let regex = new RegExp("01 10 20 02 00 04 6B CA")
+        let nroRegisters = "00 04"
+        let byteCount = "08"
 
         let request = this.Modbus.Address.Slave + " "
             + this.Modbus.Function.WriteMultipleRegisters + " "
@@ -207,7 +196,6 @@ class SimuladorTemp extends SerialReqManager {
             + config.SensorType + " "
             + config.Mode + " "
             + config.Value + " "
-            + config.Group + " "
             + config.Compensation
 
         request += ` ${CRC16.Modbus(request.split(" "), "string")}`
@@ -215,8 +203,9 @@ class SimuladorTemp extends SerialReqManager {
         const sendResult = await this.WatchForResponse({
             request: request,
             regex: regex,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
+            maxTries: this.MAX_TRIES, tryNumber: 1, readTimeout: 100
         }, 1000)
+
 
         if (sendResult.response != null) {
             return {
@@ -239,12 +228,12 @@ class SimuladorTemp extends SerialReqManager {
      */
     async ReqInputValue() {
 
-        let regex = new RegExp("01 03 0E ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
-        let nroRegisters = "00 07"
-        let startAddress = this.Modbus.Address.HoldingRegister.SensorType
+        let regex = new RegExp("01 04 04 ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
+        let nroRegisters = "00 02"
+        let startAddress = this.Modbus.Address.HoldingRegister.InputValue
 
         let request = this.Modbus.Address.Slave + " "
-            + this.Modbus.Function.ReadHoldingRegisters + " "
+            + this.Modbus.Function.ReadInputRegisters + " "
             + startAddress + " "
             + nroRegisters
 
@@ -253,18 +242,40 @@ class SimuladorTemp extends SerialReqManager {
         const inputValues = await this.WatchForResponse({
             request: request,
             regex: regex,
-            maxTries: 3, tryNumber: 1, readTimeout: 100
+            maxTries: this.MAX_TRIES, tryNumber: 1, readTimeout: 100
+        }, 1000)
+    
+
+        //para conhecer o tipo de sennsor
+        
+        let regexSensor = new RegExp("01 03 02 ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
+        let nroRegistersSensor = "00 01"
+        let addresSensor = this.Modbus.Address.HoldingRegister.SensorType
+
+        let requestSensor = this.Modbus.Address.Slave + " "
+            + this.Modbus.Function.ReadHoldingRegisters + " "
+            + addresSensor + " "
+            + nroRegistersSensor    
+
+        requestSensor += ` ${CRC16.Modbus(requestSensor.split(" "), "string")}`
+
+        const inputValuesSensor = await this.WatchForResponse({
+            request: requestSensor,
+            regex: regexSensor,
+            maxTries: this.MAX_TRIES, tryNumber: 1, readTimeout: 100  
         }, 1000)
 
-        if (inputValues.response != null) {
 
-            let matchInputIndex = 6
+        if (inputValues.response != null && inputValuesSensor.response != null) {
+
+            let matchInputIndex = 1
             let matchSensorIndex = 1
-            let matchAmbientIndex = 7
+            let matchAmbientIndex = 2
 
-            let sensor = SerialPVIUtil.HextoDecimal(inputValues.response[matchSensorIndex])
-            let ambient = SerialPVIUtil.HextoDecimal(inputValues.response[matchAmbientIndex]) / 10
-            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.response[matchInputIndex]) / 10
+
+            let ambient = SerialPVIUtil.HextoDecimal(inputValues.response[matchAmbientIndex])/10
+            let inputValue = SerialPVIUtil.HextoDecimal(inputValues.response[matchInputIndex])/10
+            let sensor = SerialPVIUtil.HextoDecimal(inputValuesSensor.response[matchSensorIndex])
 
             switch (sensor) {
                 case 0:
