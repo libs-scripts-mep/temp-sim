@@ -146,22 +146,22 @@ export default class SimuladorTemp {
      */
     static async ReqInputValue() {
 
-        const resultado = await this.Modbus.ReadInputRegisters(12289, 2)
-        console.log(resultado)
-        const result = await this.Modbus.ReadHoldingRegisters(8194,1)
-        console.log(result)
+        const inputValueAmbient = await this.Modbus.ReadInputRegisters(12289, 2)
+        console.log(inputValueAmbient)
+        const SensorType = await this.Modbus.ReadHoldingRegisters(8194,1)
+        console.log(SensorType)
     
-        if (resultado.success&&result.success) {
+        if (inputValueAmbient.success&&SensorType.success) {
 
-            const sensor = result.msg[0]
+            const sensor = SensorType.msg[0]
             console.log(sensor)
             let sensorName = ""
             if (sensor == 0x00) { sensorName = "J" } else { sensorName = "K" }
             console.log(sensorName)
             
-            const inputValue = resultado.msg[0]
+            const inputValue = inputValueAmbient.msg[0]
             console.log(inputValue)
-            const ambient = resultado.msg[1]/10
+            const ambient = inputValueAmbient.msg[1]/10
             console.log(ambient)
 
 
