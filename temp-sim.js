@@ -23,6 +23,8 @@ export default class SimuladorTemp {
 
     static Addr = {
         HoldingRegister: {
+            State: 8192,//0x2000, 0=modo normal, 1=modo calibração entrada, 2=modo calibração saída
+            StateN: 8193,//0x2001,
             SensorType: 8194,//0x2002, j ou k
             Mode: 8195,//0x2003, saída é 0, entrada é 1
             Value: 8196,//0x2004,
@@ -30,6 +32,31 @@ export default class SimuladorTemp {
             InputValue: 12289,//0x3001,
             Ambient: 12290,//0x3002,
         }
+    }
+
+    static OperationMode = {
+        Normal: 0x00,
+        CalibrationIN: 0x01,
+        CalibrationOUT: 0x02
+    }
+
+    static Etapa = {
+        Inicial: 0x00,
+        Um: 0x01,
+        Dois: 0x02,
+        Tres: 0x03,
+        Quatro: 0x04,
+        Cinco: 0x05
+    }
+
+    static Mode = {
+        OUT: 0x00,
+        IN: 0x01,
+    }
+
+    static Compensation = {
+        OFF: 0x00, //sem compensação interna
+        ON: 0x01,   //com compensação interna 
     }
 
     static OutputConfig = {
@@ -146,34 +173,65 @@ export default class SimuladorTemp {
      */
     static async ReqInputValue() {
 
-        const inputValueAmbient = await this.Modbus.ReadInputRegisters(12289, 2)
-        console.log(inputValueAmbient)
-        const SensorType = await this.Modbus.ReadHoldingRegisters(8194,1)
-        console.log(SensorType)
-    
-        if (inputValueAmbient.success&&SensorType.success) {
+        const sensor = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.SensorType, 1)
 
-            const sensor = SensorType.msg[0]
-            console.log(sensor)
-            let sensorName = ""
-            if (sensor == 0x00) { sensorName = "J" } else { sensorName = "K" }
-            console.log(sensorName)
-            
-            const inputValue = inputValueAmbient.msg[0]
-            console.log(inputValue)
-            const ambient = inputValueAmbient.msg[1]/10
-            console.log(ambient)
+        if (!sensor.success) { return { success: false, msg: sensor.msg } } 
 
+        const resultSemCompensation = await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+            [
+                this.OperationMode.Normal,
+                this.Etapa.Inicial,
+                sensor.msg[0],
+                this.Mode.IN,
+                0x00,
+                this.Compensation.OFF
+
+            ], 1, 10)
+
+        await this.Delay(2000)
+        const semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+
+
+        const resultNotCompensated = await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+            [
+                this.OperationMode.Normal,
+                this.Etapa.Inicial,
+                sensor.msg[0],
+                this.Mode.IN,
+                0x00,
+                this.Compensation.ON
+
+            ], 1, 10)
+
+        await this.Delay(2000)
+        const withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+
+        console.log(">>>>>> sem compensação  interna <<<<<<<")
+        console.log(semCompensation.msg[0]/10)
+        console.log(">>>>>> com compensação interna <<<<<<<")
+        console.log(withCompesation.msg[0]/10)
+
+        if (resultSemCompensation.success && resultNotCompensated.success) {
+
+            const sensorName = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.SensorType, 1)
+            if (sensorName.success) {
+                if (sensorName.msg[0] === this.Sensors.J.value) {
+                    sensorName.msg[0] = "J"
+                } else {
+                    sensorName.msg[0] === this.Sensors.K.value
+                    sensorName.msg[0] = "K"
+                }
+
+            }
 
             return {
                 result: true,
                 msg: "Sucesso ao obter valores",
-                sensor: sensorName,
-                inputValue: inputValue,
-                ambient: ambient,
-                inputValueNotCompensated: inputValue - ambient
+                sensor: sensorName.msg[0],
+                inputValue: withCompesation.msg[0]/10,
+                ambient: withCompesation.msg[1]/10,
+                inputValueNotCompensated: semCompensation.msg[0]/10
             }
-
         } else {
             return {
                 result: false,
@@ -185,10 +243,175 @@ export default class SimuladorTemp {
             }
         }
 
+    }
 
+    static async CalibrationInConfig() {
+
+        await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+            [
+                this.OperationMode.CalibrationIN,
+                this.Etapa.Inicial,
+                this.Sensors.J.value,
+                this.Mode.IN,
+                0x00,
+                this.Compensation.OFF
+
+            ], 1, 10)
+
+        let Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+        let Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+        if (!Operation.success || !Step.success) {
+            return {
+                success: false,
+                msg: "Calibração da entrada mal sucedida"
+            }
+        }
+        else if (Operation.msg == this.OperationMode.CalibrationIN && Step.msg == this.Etapa.Inicial) {
+            await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+                [
+                    this.OperationMode.CalibrationIN,
+                    this.Etapa.Um,
+                    this.Sensors.J.value,
+                    this.Mode.IN,
+                    0x00,
+                    this.Compensation.OFF
+
+                ], 1, 10)
+            Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+            Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+            if (Operation.msg == this.OperationMode.CalibrationIN && Step.msg == this.Etapa.Um) {
+                UI.showText(UI.top_main_text, "Simule 10 sensor J no cappo-12 (grupo R) e pressione avança")
+                if (!await UI.showAdvance(60000)) {
+                    return {
+                        success: false,
+                        msg: "Calibração cancelada pelo operador"
+                    }
+                } else {
+                    await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+                        [
+                            this.OperationMode.CalibrationIN,
+                            this.Etapa.Dois,
+                            this.Sensors.J.value,
+                            this.Mode.IN,
+                            0x00,
+                            this.Compensation.OFF
+
+                        ], 1, 10)
+
+                    Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+                    while (Step.msg != this.Etapa.Tres) {
+                        Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+                    }
+                    UI.showText(UI.top_main_text, "Simule 750 sensor J no cappo-12 (grupo R) e pressione avança")
+                    if (!await UI.showAdvance(10000)) {
+                        return {
+                            success: false,
+                            msg: "Calibração cancelada pelo operador"
+                        }
+                    }
+                    await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
+                        [
+                            this.OperationMode.CalibrationIN,
+                            this.Etapa.Quatro,
+                            this.Sensors.J.value,
+                            this.Mode.IN,
+                            0x00,
+                            this.Compensation.OFF
+
+                        ], 1, 10)
+
+                    Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+                    Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+                    while (Operation.msg != this.OperationMode.Normal && Step.msg != this.Etapa.Inicial) {
+                        Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+                        Step = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+                    }
+                    return {
+                        success: true,
+                        msg: "Calibração da entrada bem sucedida"
+                    }
+
+                }
+
+            }
+
+        } else {
+            return {
+                success: false,
+                msg: "Calibração da entrada mal sucedida"
+            }
+        }
+
+
+    }
+
+    static async CalibrationOutConfig() {
+        const steps = [
+            { state: 1, message: "Coloque o cappo-12 (grupo R) em modo entrada.\n Utilice o encoder do cappinho para ajustar a saída para 0ºC.\nPressione avança" },
+            { state: 2, message: "Coloque o cappo-12 Sensor J(grupo R) em modo entrada.\n Utilice o encoder do cappinho para ajustar a saída para 750ºC.\nPressione avança" },
+            { state: 3, message: "Coloque o cappo-12 Sensor K (grupo S) em modo entrada.\n Utilice o encoder do cappinho para ajustar a saída para 0ºC.\nPressione avança" },
+            { state: 4, message: "Coloque o cappo-12 Sensor K (grupo S) em modo entrada.\n Utilice o encoder do cappinho para ajustar a saída para 1150ºC.\nPressione avança" }
+        ];
+
+        await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State, [
+            this.OperationMode.CalibrationOUT,
+            this.Etapa.Inicial,
+            this.Sensors.J.value,
+            this.Mode.OUT,
+            0x00,
+            this.Compensation.OFF
+        ], 1, 10);
+
+        let Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+        let Etapa = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+        if (!Operation.success || !Etapa.success) return { success: false, msg: "Calibração da entrada mal sucedida" };
+
+        for (const step of steps) {
+            await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State, [
+                this.OperationMode.CalibrationOUT,
+                step.state,
+                this.Sensors.J.value,
+                this.Mode.OUT,
+                0x00,
+                this.Compensation.OFF
+            ], 1, 10);
+
+            Operation = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.State, 1)
+            Etapa = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+            if (Etapa.msg != step.state) return { success: false, msg: "Calibração da entrada mal sucedida" };
+
+            if (step.message) {
+                UI.showText(UI.top_main_text, step.message);
+                if (!await UI.showAdvance(60000)) return { success: false, msg: "Calibração da entrada mal sucedida" };
+            }
+        }
+
+        await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State, [
+            this.OperationMode.CalibrationOUT,
+            this.Etapa.Cinco,
+            this.Sensors.J.value,
+            this.Mode.OUT,
+            0x00,
+            this.Compensation.OFF
+        ], 1, 10);
+
+        while ((Etapa = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)).msg != 0) {
+            Etapa = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.StateN, 1)
+        }
+
+        return { success: true, msg: "Calibração da entrada bem sucedida" };
+    }
+
+    static async Delay(timeout) {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve()
+            }, timeout)
+        })
     }
 
 
     static { window.SimuladorTemp = SimuladorTemp }
 }
+
 
