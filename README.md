@@ -47,7 +47,7 @@ As demais informações e instruções estarão disponíveis via `JSDocs`.
 | Interface | UART    |
 | Baud Rate | 9600    |
 | Data Bits | 8       |
-| Paridade  | Par     |
+| Paridade  | None    |
 | Stop Bit  | 1       |
 
 ## Funções Modbus Implementadas
@@ -68,13 +68,12 @@ As demais informações e instruções estarão disponíveis via `JSDocs`.
 
 | Address | Tipo de Registrador | Descrição                             | Referência em Firmware | Observação                                                                     |
 | ------- | ------------------- | ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
-| 0x1E    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x1F    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x20    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x21    | Holding Register    | [Grupo](#grupo)                       | SET_GROUP              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x22    | Holding Register    | [Compensacao](#modo-de-compensação)   | -                      | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x23    | Holding Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
-| 0x24    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
+| 0x2002    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2003    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2004    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2005    | Holding Register    | [Compensacao](#modo-de-compensação)   | -                      | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x3001    | Input Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
+| 0x3002    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
 
 ### Tipo de Sensor
 
@@ -82,7 +81,6 @@ As demais informações e instruções estarão disponíveis via `JSDocs`.
 | ------- | ---- | ------ |
 | 0       | 0x00 | Tipo J |
 | 1       | 0x01 | Tipo K |
-| 2       | 0x02 | mV     |
 
 ### Modo de Operação
 
@@ -103,16 +101,7 @@ As demais informações e instruções estarão disponíveis via `JSDocs`.
 
 ### Grupo
 
-| Decimal | Hex  | Opção     |
-| ------- | ---- | --------- |
-| 0       | 0x00 | Grupo A   |
-| 1       | 0x01 | Grupo B   |
-| 2       | 0x02 | Grupo C   |
-| 3       | 0x03 | Grupo D   |
-| 4       | 0x04 | Grupo E   |
-| ...     | 0x01 | Grupo ... |
-
-> ⚠️ Grupo só impacta seleção de preset das teclas A, B e C.
+Não tem. Sempre é "A"
 
 ### Modo de Compensação
 

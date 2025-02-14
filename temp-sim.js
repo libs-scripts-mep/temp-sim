@@ -14,7 +14,7 @@ export default class SimuladorTemp {
     static NodeAddress = 0x01
 
     static ReqReadDeviceID = "012B0E0401B2E7"
-    static RegexReadDeviceID = new RegExp("012B0E04810000010109494E562D436170706FBEB7")
+    static RegexReadDeviceID = new RegExp("012B0E04810000010109494E562D436170706FBE")
 
     static Sensors = {
         J: { value: 0x00, min: -10, max: 760 },
@@ -188,8 +188,12 @@ export default class SimuladorTemp {
 
             ], 1, 10)
 
-        await this.Delay(2000)
-        const semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        await this.Delay(1500)
+        let semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        while (semCompensation == null || !semCompensation.success) {
+            await this.Delay(200)
+            semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        }
 
 
         const resultNotCompensated = await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
@@ -203,13 +207,17 @@ export default class SimuladorTemp {
 
             ], 1, 10)
 
-        await this.Delay(2000)
-        const withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        await this.Delay(1500)
+        let withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        while (withCompesation == null || !withCompesation.success) {
+            await this.Delay(200)
+            withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        }
 
         console.log(">>>>>> sem compensação  interna <<<<<<<")
-        console.log(semCompensation.msg[0]/10)
+        console.log(semCompensation.msg[0])
         console.log(">>>>>> com compensação interna <<<<<<<")
-        console.log(withCompesation.msg[0]/10)
+        console.log(withCompesation.msg[0])
 
         if (resultSemCompensation.success && resultNotCompensated.success) {
 
