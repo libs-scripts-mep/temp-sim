@@ -6,6 +6,7 @@ class SimuladorTemp extends SerialReqManager {
         this.MAX_TRIES = 10
 
         this.FirmwareVersion = null
+        this.compensation = false
         this.Modbus = {
             RegexReadDeviceID: new RegExp("01 2B 0E 04 81 00 00 01 01 09 49 4E 56 2D 43 61 70 70 6F BE B7"),
             ReqReadDeviceID: "01 2B 0E 04 01 B2 E7",
@@ -169,10 +170,8 @@ class SimuladorTemp extends SerialReqManager {
             }
         }
 
-        return {
-            "result": result,
-            "msg": msg
-        }
+        this.compensation = compensation
+        return { result, msg }
     }
 
     /**
@@ -226,7 +225,7 @@ class SimuladorTemp extends SerialReqManager {
      * Na leitura de termopar, é retornado também em qual tipo de sensor o value foi traduzido [Tipo J ou Tipo K]
      * 
      */
-    async ReqInputValue() {
+    async ReqInputValue(compensation = true) {
 
 
         //para conhecer o tipo de sensor
@@ -252,10 +251,14 @@ class SimuladorTemp extends SerialReqManager {
         let matchSensorIndex = 1
         let sensor = SerialPVIUtil.HextoDecimal(inputValuesSensor.response[matchSensorIndex])
 
-        this.SetOutputConfig(sensor, "10", "A", true)
-        this.SendOutputConfig()
+        if (this.compensation != compensation) {
+            this.compensation = compensation
+            this.SetOutputConfig(sensor, "10", "A", compensation)
+            this.SendOutputConfig()
+            await this.Delay(3000)
+        }
 
-        //para conhecer o value
+        // para conhecer o value
 
         let regex = new RegExp("01 04 04 ([0-9|A-F]{2} [0-9|A-F]{2}) ([0-9|A-F]{2} [0-9|A-F]{2})")
         let nroRegisters = "00 02"
@@ -268,7 +271,6 @@ class SimuladorTemp extends SerialReqManager {
 
         request += ` ${CRC16.Modbus(request.split(" "), "string")}`
 
-        await this.Delay(7000)
         const inputValues = await this.WatchForResponse({
             request: request,
             regex: regex,
@@ -297,39 +299,14 @@ class SimuladorTemp extends SerialReqManager {
                     break
             }
 
-            //para configurar sem compensação
-            this.SetOutputConfig(sensor, "10", "A", false)
-            this.SendOutputConfig()
-
-            await this.Delay(7000)
-
-            request += ` ${CRC16.Modbus(request.split(" "), "string")}`
-
-            const inputNotCompesation = await this.WatchForResponse({
-                request: request,
-                regex: regex,
-                maxTries: this.MAX_TRIES, tryNumber: 1, readTimeout: 100
-            }, 1000)
-
-            if (inputNotCompesation.response != null) {
-                let inputNotCompesationValue = SerialPVIUtil.HextoDecimal(inputNotCompesation.response[matchInputIndex]) / 10
-                return {
-                    "result": true,
-                    "msg": "Sucesso ao obter valores",
-                    "sensor": sensor,
-                    "inputValue": inputValue,
-                    "ambient": ambient,
-                    "inputNotCompesationValue": inputNotCompesationValue
-                }
-
-            } else {
-                return {
-                    "result": false,
-                    "msg": "Falha ao obter valores"
-                }
+            return {
+                "result": true,
+                "msg": "Sucesso ao obter valores",
+                "sensor": sensor,
+                "inputValue": inputValue,
+                "ambient": ambient,
+                "inputNotCompesationValue": inputValue - ambient
             }
-
-
 
         } else {
             return {
