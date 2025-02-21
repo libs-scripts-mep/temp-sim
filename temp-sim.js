@@ -14,7 +14,7 @@ export default class SimuladorTemp {
     static NodeAddress = 0x01
 
     static ReqReadDeviceID = "012B0E0401B2E7"
-    static RegexReadDeviceID = new RegExp("012B0E04810000010109494E562D436170706FBE")
+    static RegexReadDeviceID = new RegExp("012B0E04810000010109494E562D436170706FBEB7")
 
     static Sensors = {
         J: { value: 0x00, min: -10, max: 760 },
@@ -55,6 +55,7 @@ export default class SimuladorTemp {
     }
 
     static Compensation = {
+        state: false,
         OFF: 0x00, //sem compensação interna
         ON: 0x01,   //com compensação interna 
     }
@@ -124,6 +125,7 @@ export default class SimuladorTemp {
         this.OutputConfig.Value = value
         this.OutputConfig.SensorType = this.Sensors[sensor].value
         compensation ? this.OutputConfig.Compensation = 0x01 : this.OutputConfig.Compensation = 0x00
+        this.Compensation.state = compensation
 
         return { success: true, msg: `Nova configuração recebida` }
     }
@@ -171,74 +173,48 @@ export default class SimuladorTemp {
      * ```
      * 
      */
-    static async ReqInputValue() {
+    static async ReqInputValue(compensation = true) {
 
         const sensor = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.SensorType, 1)
+        if (!sensor.success) { return { success: false, msg: sensor.msg } }
 
-        if (!sensor.success) { return { success: false, msg: sensor.msg } } 
+        if (this.Compensation.state != compensation) {
+            const config = await this.Modbus.WriteMultipleRegisters(
+                this.Addr.HoldingRegister.State,
+                [
+                    this.OperationMode.Normal,
+                    this.Etapa.Inicial,
+                    sensor.msg[0],
+                    this.Mode.IN,
+                    0x00,
+                    compensation ? this.Compensation.ON : this.Compensation.OFF
+                ],
+                1,
+                10
+            )
 
-        const resultSemCompensation = await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
-            [
-                this.OperationMode.Normal,
-                this.Etapa.Inicial,
-                sensor.msg[0],
-                this.Mode.IN,
-                0x00,
-                this.Compensation.OFF
+            if (!config.success) { return { success: false, msg: config.msg } }
 
-            ], 1, 10)
-
-        await this.Delay(1500)
-        let semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
-        while (semCompensation == null || !semCompensation.success) {
-            await this.Delay(200)
-            semCompensation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+            this.Compensation.state = compensation
+            await this.Delay(2500)
         }
 
-
-        const resultNotCompensated = await this.Modbus.WriteMultipleRegisters(this.Addr.HoldingRegister.State,
-            [
-                this.OperationMode.Normal,
-                this.Etapa.Inicial,
-                sensor.msg[0],
-                this.Mode.IN,
-                0x00,
-                this.Compensation.ON
-
-            ], 1, 10)
-
-        await this.Delay(1500)
-        let withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
-        while (withCompesation == null || !withCompesation.success) {
-            await this.Delay(200)
-            withCompesation = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        if (sensor.msg[0] === this.Sensors.J.value) {
+            sensor.msg[0] = "J"
+        } else {
+            sensor.msg[0] === this.Sensors.K.value
+            sensor.msg[0] = "K"
         }
 
-        console.log(">>>>>> sem compensação  interna <<<<<<<")
-        console.log(semCompensation.msg[0])
-        console.log(">>>>>> com compensação interna <<<<<<<")
-        console.log(withCompesation.msg[0])
-
-        if (resultSemCompensation.success && resultNotCompensated.success) {
-
-            const sensorName = await this.Modbus.ReadHoldingRegisters(this.Addr.HoldingRegister.SensorType, 1)
-            if (sensorName.success) {
-                if (sensorName.msg[0] === this.Sensors.J.value) {
-                    sensorName.msg[0] = "J"
-                } else {
-                    sensorName.msg[0] === this.Sensors.K.value
-                    sensorName.msg[0] = "K"
-                }
-
-            }
-
+        const inputValue = await this.Modbus.ReadInputRegisters(this.Addr.HoldingRegister.InputValue, 2)
+        if (inputValue.success) {
             return {
                 result: true,
                 msg: "Sucesso ao obter valores",
-                sensor: sensorName.msg[0],
-                inputValue: withCompesation.msg[0]/10,
-                ambient: withCompesation.msg[1]/10,
-                inputValueNotCompensated: semCompensation.msg[0]/10
+                sensor: sensor.msg[0],
+                inputValue: inputValue.msg[0] / 10,
+                ambient: inputValue.msg[1] / 10,
+                inputValueNotCompensated: (inputValue.msg[0] - inputValue.msg[1]) / 10
             }
         } else {
             return {
@@ -250,7 +226,6 @@ export default class SimuladorTemp {
                 inputValueNotCompensated: null
             }
         }
-
     }
 
     static async CalibrationInConfig() {
@@ -421,4 +396,3 @@ export default class SimuladorTemp {
 
     static { window.SimuladorTemp = SimuladorTemp }
 }
-
