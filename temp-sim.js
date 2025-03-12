@@ -186,7 +186,7 @@ export default class SimuladorTemp {
                     this.Etapa.Inicial,
                     sensor.msg[0],
                     this.Mode.IN,
-                    0x00,
+                    this.OutputConfig.Value,
                     compensation ? this.Compensation.ON : this.Compensation.OFF
                 ],
                 1,
