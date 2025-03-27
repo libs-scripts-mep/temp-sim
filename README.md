@@ -1,3 +1,26 @@
+- [Simulador de Temperatura Inova](#simulador-de-temperatura-inova)
+  - [Instalando](#instalando)
+  - [Desinstalando](#desinstalando)
+  - [Atualizando](#atualizando)
+  - [Como utilizar](#como-utilizar)
+- [Detalhes de Firmware e Hardware](#detalhes-de-firmware-e-hardware)
+  - [Interface Comunicacao](#interface-comunicacao)
+  - [Funções Modbus Implementadas](#funções-modbus-implementadas)
+  - [Mapa de Registradores](#mapa-de-registradores)
+    - [Tipo de Sensor](#tipo-de-sensor)
+    - [Modo de Operação](#modo-de-operação)
+    - [Valor](#valor)
+    - [Grupo](#grupo)
+    - [Modo de Compensação](#modo-de-compensação)
+  - [Desmembrando a Requisição](#desmembrando-a-requisição)
+- [Calibração e Verificação](#calibração-e-verificação)
+  - [Sem Compensação](#sem-compensação)
+  - [Com Compensação usando Cabo Compensado](#com-compensação-usando-cabo-compensado)
+  - [Com Compensação usando Cabo de Cobre](#com-compensação-usando-cabo-de-cobre)
+- [Tabela de erro](#tabela-de-erro)
+- [Como descobrir o erro](#como-descobrir-o-erro)
+
+
 # Simulador de Temperatura Inova
 
 Biblioteca que controla o simulador de temperatura inova.
@@ -68,12 +91,12 @@ As demais informações e instruções estarão disponíveis via `JSDocs`.
 
 | Address | Tipo de Registrador | Descrição                             | Referência em Firmware | Observação                                                                     |
 | ------- | ------------------- | ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
-| 0x2002    | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x2003    | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x2004    | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x2005    | Holding Register    | [Compensacao](#modo-de-compensação)   | -                      | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
-| 0x3001    | Input Register    | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
-| 0x3002    | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
+| 0x2002  | Holding Register    | [Tipo de Sensor](#tipo-de-sensor)     | SET_SENSOR             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2003  | Holding Register    | [Modo de Operação](#modo-de-operação) | SET_IN_OUT             | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2004  | Holding Register    | [Valor](#valor)                       | SET_VALUE              | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x2005  | Holding Register    | [Compensacao](#modo-de-compensação)   | -                      | Somente para [Modo de Operação](#modo-de-operação) = 0                         |
+| 0x3001  | Input Register      | [Valor Leitura](#grupo)               | LEITURA                | Valor instantâneo da entrada de termopar, convertido para o sensor selecionado |
+| 0x3002  | Holding Register    | [Valor NTC](#grupo)                   | AMBIENTE               | Valor instantâneo da temperatura ambiente do ***SIMULADOR***                   |
 
 ### Tipo de Sensor
 
@@ -137,3 +160,52 @@ Confira a estrutura do frame:
 | 0x00 | Grupo (Low Byte)              | -                                                                 |
 | 0xEF | CRC (High Byte)               | Ciclic Redundancy Check                                           |
 | 0x1F | CRC (Low Byte)                | -                                                                 |
+
+# Calibração e Verificação
+
+## Sem Compensação
+
+- **Simulação e Calibração:** simular sem compensação (10 e 750);
+- **Verificação com sinal do simulador:** gerar sinal sem compensação. Controlador deve ler: `sinal gerado + ambiente do controlador + erro`;
+- **Verificação com sinal externo ao simulador:** 
+  - O primeiro passo é obter o "valor bruto" do sinal na entrada do simulador, ou seja, descobrir o valor do sinal sem compensação. Isto pode ser feito de duas maneiras:
+    - Utilizando `ReqInputValue(false)`, o valor bruto é obtido na propriedade `inputValue`;
+    - Utilizando `ReqInputValue()` ou `ReqInputValue(true)`, o valor bruto é obtido ao calcular `inputValue - ambient - erro` ou `inputValueNotCompensated - erro`.
+  - Após obter o valor bruto, o controlador deve ler `valor bruto + ambiente do controlador + erro`;
+
+## Com Compensação usando Cabo Compensado
+
+- **Simulação e Calibração:** simular com compensação (10 e 750);
+- **Verificação com sinal do simulador:** controlador deve ler o sinal gerado;
+- **Verificação com sinal externo ao simulador:** ler com compensação, controlador deve ler o mesmo valor.
+
+## Com Compensação usando Cabo de Cobre
+
+- **Simulação e Calibração:** 
+  - **10°C:** simular **com compensação** o seguinte valor: `10 + ambiente do simulador - ambiente do controlador - erro`;
+  - **750°C:** simular **sem compensação** o seguinte valor: `750 - ambiente do controlador - erro`;
+- **Verificação com sinal do simulador:** gerar sinal sem compensação. Controlador deve ler: `sinal gerado + ambiente do controlador + erro`;
+- **Verificação com sinal externo ao simulador:** 
+  - O primeiro passo é obter o "valor bruto" do sinal na entrada do simulador, ou seja, descobrir o valor do sinal sem compensação. Isto pode ser feito de duas maneiras:
+    - Utilizando `ReqInputValue(false)`, o valor bruto é obtido na propriedade `inputValue`;
+    - Utilizando `ReqInputValue()` ou `ReqInputValue(true)`, o valor bruto é obtido ao calcular `inputValue - ambient - erro` ou `inputValueNotCompensated - erro`.
+  - Após obter o valor bruto, o controlador deve ler `valor bruto + ambiente do controlador + erro`;
+
+# Tabela de erro
+
+Este é um "erro" que acontece quando o controlador está lendo com compensação um valor gerado sem compensação.
+
+| Propriedade | Erro  |
+| :---------- | :---: |
+| 30          |   0   |
+| 110         |  -1   |
+| 330         |  -2   |
+| 530         |  -3   |
+| 620         |  -4   |
+| 690         |  -5   |
+| > 690       |  -6   |
+
+# Como descobrir o erro
+  - Calcular `valor bruto + ambiente do controlador`;
+  - Encontrar na tabela de erro a propriedade que é maior ou igual a este valor;
+  - Utilizar o erro correspondente a essa propriedade.
